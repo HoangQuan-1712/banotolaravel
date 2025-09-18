@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -57,6 +58,12 @@ class AdminDashboardController extends Controller
         $processingOrders = Order::where('status', 'processing')->count();
         $completedOrders = Order::where('status', 'completed')->count();
         $cancelledOrders = Order::where('status', 'cancelled')->count();
+
+        // Thống kê đánh giá
+        $totalReviews = Review::whereNull('parent_review_id')->count();
+        $pendingReviews = Review::where('status', 'pending')->whereNull('parent_review_id')->count();
+        $approvedReviews = Review::where('status', 'approved')->whereNull('parent_review_id')->count();
+        $avgRating = round(Review::whereNull('parent_review_id')->avg('rating'), 1);
 
         // Top sản phẩm bán chạy
         $topProducts = DB::table('order_items')
@@ -140,6 +147,10 @@ class AdminDashboardController extends Controller
             'newUsersThisMonth',
             'newOrdersThisMonth',
             'revenueThisMonth',
+            'totalReviews',
+            'pendingReviews',
+            'approvedReviews',
+            'avgRating',
             'pendingOrders',
             'processingOrders',
             'completedOrders',

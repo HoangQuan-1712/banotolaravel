@@ -1,0 +1,17 @@
+Hướng dẫn sửa lỗi database connection:
+
+1. Mở file .env trong thư mục gốc dự án
+2. Tìm dòng: DB_DATABASE=ecommerce2024
+3. Sửa thành: DB_DATABASE=laravel
+4. Đảm bảo các dòng khác như sau:
+   DB_CONNECTION=mysql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_USERNAME=root
+   DB_PASSWORD=
+
+5. Sau khi sửa, chạy lệnh:
+   php artisan config:clear
+   php artisan migrate
+
+Lưu ý: Đảm bảo đã tạo database 'laravel' trong phpMyAdmin trước khi chạy migrate.

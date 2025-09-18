@@ -19,7 +19,7 @@ class Product extends Model
 
     public function reviews()
     {
-        return $this->hasMany(ProductReview::class);
+        return $this->hasMany(Review::class);
     }
 
     public function wishlistUsers()
@@ -34,13 +34,12 @@ class Product extends Model
 
     public function getAverageRatingAttribute()
     {
-        $approvedReviews = $this->reviews()->where('status', ProductReview::STATUS_APPROVED);
-        return $approvedReviews->count() > 0 ? round($approvedReviews->avg('rating'), 1) : 0;
+        return $this->reviews()->count() > 0 ? round($this->reviews()->avg('rating'), 1) : 0;
     }
 
     public function getReviewsCountAttribute()
     {
-        return $this->reviews()->where('status', ProductReview::STATUS_APPROVED)->count();
+        return $this->reviews()->count();
     }
 
     public function getRatingStarsAttribute()

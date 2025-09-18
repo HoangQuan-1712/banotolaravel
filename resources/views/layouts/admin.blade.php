@@ -267,6 +267,17 @@
                             <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('admin.reviews.index') }}">
+                            <i class="fas fa-star"></i> Đánh Giá
+                            @php
+                                $pendingReviews = \App\Models\Review::where('status', 'pending')->whereNull('parent_review_id')->count();
+                            @endphp
+                            @if($pendingReviews > 0)
+                                <span class="badge bg-warning text-dark ms-1">{{ $pendingReviews }}</span>
+                            @endif
+                        </a>
+                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-cogs"></i> Quản Lý
@@ -283,6 +294,9 @@
                             </a></li>
                             <li><a class="dropdown-item" href="{{ route('admin.orders.index') }}">
                                 <i class="fas fa-shopping-bag"></i> Đơn Hàng
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ route('admin.reviews.index') }}">
+                                <i class="fas fa-star"></i> Đánh Giá
                             </a></li>
                         </ul>
                     </li>

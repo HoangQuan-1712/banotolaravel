@@ -91,6 +91,11 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
     // Inventory reservation logic
     public function reserveStock(): void
     {

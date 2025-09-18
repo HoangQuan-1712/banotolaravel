@@ -49,7 +49,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function reviews()
     {
-        return $this->hasMany(ProductReview::class);
+        return $this->hasMany(Review::class);
     }
 
     public function loyaltyPoints()
@@ -95,7 +95,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function getReviewsCountAttribute()
     {
-        return $this->reviews()->where('status', ProductReview::STATUS_APPROVED)->count();
+        return $this->reviews()->count();
     }
 
     public function addresses()

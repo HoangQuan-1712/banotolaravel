@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\UserAddress;
+use App\Models\Review;
 
 class OrderController extends Controller
 {
@@ -31,11 +32,11 @@ class OrderController extends Controller
 
         // Tính tổng tiền để hiển thị trong form
         $total = collect($cart)->sum(fn($item) => $item['price'] * $item['quantity']);
-        
+
         // Lấy danh sách địa chỉ của user
         $addresses = Auth::user()->addresses()->orderBy('is_default', 'desc')->get();
         $defaultAddress = Auth::user()->defaultAddress;
-        
+
         return view('user.payment.index', compact('cart', 'total', 'addresses', 'defaultAddress'));
     }
 
@@ -91,7 +92,7 @@ class OrderController extends Controller
         foreach ($cart as $key => $item) {
             // Xử lý cả trường hợp cũ (không có id) và mới (có id)
             $productId = $item['id'] ?? $item['product_id'] ?? $key;
-            
+
             if ($productId) {
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -119,7 +120,7 @@ class OrderController extends Controller
         try {
             $order->reserveStock();
         } catch (\Throwable $e) {
-            \Log::error('Reserve stock failed for COD order '.$order->id.': '.$e->getMessage());
+            \Log::error('Reserve stock failed for COD order ' . $order->id . ': ' . $e->getMessage());
         }
 
         return redirect()->route('user.orders.index')
@@ -195,7 +196,6 @@ class OrderController extends Controller
             return redirect()
                 ->route('user.orders.index')
                 ->with('error', 'Không tạo được link thanh toán MoMo: ' . $msg);
-
         } catch (\Exception $e) {
             Log::error('MoMo request exception', ['error' => $e->getMessage()]);
             return redirect()
@@ -210,7 +210,7 @@ class OrderController extends Controller
     public function callback(Request $request)
     {
         $resultCode = $request->input('resultCode'); // 0 = success
-        
+
         // Có orderId thì lấy id thực từ "time_orderId"
         $order = null;
         if ($request->filled('orderId')) {
@@ -228,7 +228,7 @@ class OrderController extends Controller
                 try {
                     $order->reserveStock();
                 } catch (\Throwable $e) {
-                    \Log::error('Reserve stock failed for MoMo order '.$order->id.': '.$e->getMessage());
+                    \Log::error('Reserve stock failed for MoMo order ' . $order->id . ': ' . $e->getMessage());
                 }
             }
             return redirect()->route('user.orders.index')
@@ -239,7 +239,11 @@ class OrderController extends Controller
         if ($order) {
             $order->update(['status' => 'thanh toán MoMo không thành công']);
             // Release reserved stock on failed payment
-            try { $order->releaseReservedStock(); } catch (\Throwable $e) { \Log::error('Release stock failed on MoMo fail for order '.$order->id.': '.$e->getMessage()); }
+            try {
+                $order->releaseReservedStock();
+            } catch (\Throwable $e) {
+                \Log::error('Release stock failed on MoMo fail for order ' . $order->id . ': ' . $e->getMessage());
+            }
         }
 
         // Quay lại trang checkout để người dùng thử thanh toán lại
@@ -253,7 +257,7 @@ class OrderController extends Controller
     public function ipn(Request $request)
     {
         Log::info('MoMo IPN payload:', $request->all());
-        
+
         // TODO: bạn nên xác thực chữ ký ở đây
         // Ví dụ cập nhật trạng thái dựa vào orderId/resultCode:
         if ($request->filled('orderId')) {
@@ -267,7 +271,7 @@ class OrderController extends Controller
                 }
             }
         }
-        
+
         return response()->json(['resultCode' => 0, 'message' => 'Received']);
     }
 
@@ -284,7 +288,7 @@ class OrderController extends Controller
 
         // Đưa về "chờ thanh toán" trước khi tạo giao dịch mới (tuỳ bạn)
         $order->update(['status' => 'chờ thanh toán']);
-        
+
         // PHẢI return
         return $this->redirectToMoMo($order);
     }
@@ -293,19 +297,96 @@ class OrderController extends Controller
     public function orderHistory()
     {
         $orders = Order::where('user_id', Auth::id())
-            ->with('items.product')
+            ->with(['items.product', 'reviews'])
             ->orderByDesc('created_at')
-            ->get();
-        return view('user.payment.order', compact('orders'));
+            ->paginate(10);
+        return view('user.orders.index', compact('orders'));
     }
 
-    // gọi chi tiết sản phẩm từng đơn hàng
-    public function show(Order $order)
+    // gọi chi tiết sản phẩm từng đơn hàng (legacy method - kept for backward compatibility)
+    public function showPaymentOrder(Order $order)
     {
         if ($order->user_id !== Auth::id()) {
             abort(403, 'Bạn không có quyền truy cập đơn hàng này.');
         }
         $order->load('items.product');
         return view('user.payment.show', compact('order'));
+    }
+
+
+    // Chi tiết 1 đơn hàng (có items & product) + map reviewedPairs để tránh N+1
+    public function show(Request $request, $orderId)
+    {
+        // Eager load items.product để tránh N+1 products
+        $order = Order::with(['items.product'])
+            ->where('id', $orderId)
+            ->where('user_id', $request->user()->id) // đảm bảo là đơn của chính user
+            ->firstOrFail();
+
+        // -------- Helper tránh N+1 (đánh giá đã tồn tại) --------
+        // Lấy list product_id trong đơn:
+        $productIds = $order->items->pluck('product_id')->unique()->values();
+
+        // Query duy nhất xem user đã review những product nào trong đơn này
+        // -> trả về map dạng [product_id => true]
+        $reviewedPairs = Review::where('order_id', $order->id)
+            ->where('user_id', $request->user()->id)
+            ->whereIn('product_id', $productIds)
+            ->pluck('product_id')
+            ->flip(); // key là product_id đã review (đỡ N+1 ở view)
+
+        return view('user.orders.show', compact('order', 'reviewedPairs'));
+    }
+
+    // Store review from order history
+    public function storeReview(Request $request)
+    {
+        $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'order_id' => 'required|exists:orders,id',
+            'rating' => 'required|integer|min:1|max:5',
+            'title' => 'required|string|max:255',
+            'comment' => 'required|string|max:1000',
+        ]);
+
+        // Verify user owns the order
+        $order = Order::where('id', $request->order_id)
+                     ->where('user_id', auth()->id())
+                     ->first();
+        
+        if (!$order) {
+            return redirect()->back()->with('error', 'Đơn hàng không tồn tại hoặc không thuộc về bạn.');
+        }
+
+        // Verify order contains the product
+        $orderItem = $order->items()->where('product_id', $request->product_id)->first();
+        if (!$orderItem) {
+            return redirect()->back()->with('error', 'Sản phẩm không có trong đơn hàng này.');
+        }
+
+        // Check if already reviewed
+        $existingReview = Review::where([
+            'user_id' => auth()->id(),
+            'product_id' => $request->product_id,
+            'order_id' => $request->order_id,
+        ])->first();
+
+        if ($existingReview) {
+            return redirect()->back()->with('error', 'Bạn đã đánh giá sản phẩm này rồi.');
+        }
+
+        // Create review
+        Review::create([
+            'user_id' => auth()->id(),
+            'product_id' => $request->product_id,
+            'order_id' => $request->order_id,
+            'rating' => $request->rating,
+            'title' => $request->title,
+            'comment' => $request->comment,
+            'is_verified_purchase' => true,
+            'status' => 'approved', // Auto approve for verified purchases
+        ]);
+
+        return redirect()->back()->with('success', 'Đánh giá của bạn đã được gửi thành công!');
     }
 }

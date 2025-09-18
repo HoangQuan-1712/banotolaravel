@@ -376,7 +376,240 @@
             color: white;
             padding: 15px 20px;
         }
+
+        /* Live Chat Button */
+        .live-chat-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50px;
+            padding: 15px 20px;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            text-decoration: none;
+            border: none;
+            outline: none;
+        }
+
+        .live-chat-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+        }
+
+        .live-chat-button i {
+            font-size: 1.2rem;
+            animation: pulse 2s infinite;
+        }
+
+        .live-chat-button .chat-text {
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .unread-count {
+            background: #ff4757;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 12px;
+            font-weight: bold;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* Chat Widget */
+        .chat-widget {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 350px;
+            height: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .chat-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .admin-status {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .btn-minimize {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-minimize:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .loading-message {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+        }
+
+        .message.sent {
+            justify-content: flex-end;
+        }
+
+        .message.received {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.sent .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.received .message-bubble {
+            background: white;
+            border: 1px solid #e9ecef;
+            color: #333;
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .typing-indicator {
+            padding: 8px 15px;
+            background: #e9ecef;
+            border-top: 1px solid #dee2e6;
+            font-size: 12px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid #e9ecef;
+            background: white;
+        }
+
+        .chat-form .input-group {
+            border-radius: 25px;
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+        }
+
+        .chat-form .form-control {
+            border: none;
+            padding: 12px 15px;
+            font-size: 14px;
+        }
+
+        .chat-form .form-control:focus {
+            box-shadow: none;
+            border-color: transparent;
+        }
+
+        .chat-form .btn {
+            border: none;
+            padding: 12px 15px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .live-chat-button {
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 16px;
+            }
+            
+            .live-chat-button .chat-text {
+                display: none;
+            }
+
+            .chat-widget {
+                bottom: 20px;
+                right: 20px;
+                width: calc(100vw - 40px);
+                height: calc(100vh - 100px);
+                max-width: 350px;
+                max-height: 500px;
+            }
+        }
     </style>
+    @stack('styles')
 </head>
 
 <body>
@@ -461,6 +694,9 @@
                                     <li><a class="dropdown-item" href="{{ route('admin.orders.index') }}">
                                         <i class="fas fa-shopping-bag"></i> Đơn Hàng
                                     </a></li>
+                                    <li><a class="dropdown-item" href="{{ route('admin.chats.index') }}">
+                                        <i class="fas fa-comments"></i> Live Chat
+                                    </a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><h6 class="dropdown-header">Thống Kê</h6></li>
                                     <li><a class="dropdown-item" href="{{ route('admin.users.statistics') }}">
@@ -540,8 +776,339 @@
         @yield('content')
     </main>
 
+    <!-- Live Chat Widget (chỉ hiển thị cho user đã đăng nhập và không phải admin) -->
+    @auth
+        @if(!auth()->user()->isAdmin())
+            <!-- Chat Button -->
+            <div id="live-chat-button" class="live-chat-button">
+                <i class="fas fa-comments"></i>
+                <span class="chat-text">Live Chat</span>
+                <span id="unread-count" class="unread-count" style="display: none;">0</span>
+            </div>
+
+            <!-- Chat Widget -->
+            <div id="chat-widget" class="chat-widget" style="display: none;">
+                <div class="chat-header">
+                    <div class="chat-title">
+                        <i class="fas fa-comments"></i>
+                        <span>Hỗ trợ trực tuyến</span>
+                    </div>
+                    <div class="chat-controls">
+                        <span id="admin-status" class="admin-status">Đang kết nối...</span>
+                        <button id="minimize-chat" class="btn-minimize">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="chat-messages" class="chat-messages">
+                    <div class="loading-message">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Đang tải...</span>
+                    </div>
+                </div>
+                
+                <div class="chat-input-area">
+                    <div id="typing-indicator" class="typing-indicator" style="display: none;">
+                        <i class="fas fa-ellipsis-h"></i>
+                        <span>Admin đang nhập...</span>
+                    </div>
+                    <form id="chat-form" class="chat-form">
+                        @csrf
+                        <div class="input-group">
+                            <input type="text" id="message-input" class="form-control" placeholder="Nhập tin nhắn..." autocomplete="off">
+                            <input type="file" id="file-input" name="files[]" multiple style="display: none;" accept="image/*,.pdf,.doc,.docx">
+                            <button type="button" id="attach-btn" class="btn btn-outline-secondary">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
+    @endauth
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+{{-- nếu muốn truyền pusher config qua meta --}}
+<meta name="pusher-key" content="{{ env('PUSHER_APP_KEY') }}">
+<meta name="pusher-cluster" content="{{ env('PUSHER_APP_CLUSTER') }}">
+<meta name="pusher-host" content="{{ env('PUSHER_HOST') }}">
+<meta name="pusher-port" content="{{ env('PUSHER_PORT') }}">
+<meta name="pusher-scheme" content="{{ env('PUSHER_SCHEME','https') }}">
+
+<script>
+  window.axios = axios = window.axios || {};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script>
+  axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+  axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').content;
+</script>
+
+
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Live Chat JavaScript -->
+    @auth
+        @if(!auth()->user()->isAdmin())
+            <script src="{{ asset('js/echo.pusher.min.js') }}"></script>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const chatButton = document.getElementById('live-chat-button');
+                    const chatWidget = document.getElementById('chat-widget');
+                    const minimizeBtn = document.getElementById('minimize-chat');
+                    const chatForm = document.getElementById('chat-form');
+                    const messageInput = document.getElementById('message-input');
+                    const fileInput = document.getElementById('file-input');
+                    const attachBtn = document.getElementById('attach-btn');
+                    const chatMessages = document.getElementById('chat-messages');
+                    const typingIndicator = document.getElementById('typing-indicator');
+                    const adminStatus = document.getElementById('admin-status');
+                    const unreadCount = document.getElementById('unread-count');
+                    
+                    let currentChat = null;
+                    let isWidgetOpen = false;
+                    let unreadMessages = 0;
+                    let typingTimer = null;
+
+                    // Toggle chat widget
+                    chatButton.addEventListener('click', function() {
+                        if (isWidgetOpen) {
+                            closeChatWidget();
+                        } else {
+                            openChatWidget();
+                        }
+                    });
+
+                    // Minimize chat
+                    minimizeBtn.addEventListener('click', function() {
+                        closeChatWidget();
+                    });
+
+                    // File attachment
+                    attachBtn.addEventListener('click', function() {
+                        fileInput.click();
+                    });
+
+                    function openChatWidget() {
+                        chatWidget.style.display = 'flex';
+                        chatButton.style.display = 'none';
+                        isWidgetOpen = true;
+                        unreadMessages = 0;
+                        updateUnreadCount();
+                        
+                        if (!currentChat) {
+                            initializeChat();
+                        }
+                    }
+
+                    function closeChatWidget() {
+                        chatWidget.style.display = 'none';
+                        chatButton.style.display = 'flex';
+                        isWidgetOpen = false;
+                    }
+
+                    function updateUnreadCount() {
+                        if (unreadMessages > 0) {
+                            unreadCount.textContent = unreadMessages;
+                            unreadCount.style.display = 'block';
+                        } else {
+                            unreadCount.style.display = 'none';
+                        }
+                    }
+
+                    function initializeChat() {
+                        // Tạo hoặc lấy chat hiện tại
+                        axios.get('{{ route("chat.open") }}')
+                            .then(response => {
+                                // Giả sử response trả về chat_id
+                                currentChat = response.data.chat_id || 1; // Tạm thời hardcode
+                                loadMessages();
+                                setupRealtime();
+                            })
+                            .catch(error => {
+                                console.error('Error initializing chat:', error);
+                                showMessage('Không thể kết nối chat. Vui lòng thử lại.', 'system');
+                            });
+                    }
+
+                    function loadMessages() {
+                        if (!currentChat) return;
+                        
+                        axios.get(`/chat/${currentChat}/messages`, {
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                'Accept': 'application/json'
+                            }
+                        })
+                            .then(response => {
+                                chatMessages.innerHTML = '';
+                                if (response.data && response.data.length > 0) {
+                                    response.data.forEach(message => {
+                                        displayMessage(message);
+                                    });
+                                } else {
+                                    showMessage('Chào bạn! Hãy bắt đầu cuộc trò chuyện.', 'system');
+                                }
+                                scrollToBottom();
+                            })
+                            .catch(error => {
+                                console.error('Error loading messages:', error);
+                                showMessage('Không thể tải tin nhắn.', 'system');
+                            });
+                    }
+
+                    function displayMessage(message) {
+                        const messageDiv = document.createElement('div');
+                        
+                        // Xác định người gửi - kiểm tra nhiều cách
+                        let isOwn = false;
+                        if (message.sender_id === {{ auth()->id() }}) {
+                            isOwn = true;
+                        } else if (message.sender && message.sender.id === {{ auth()->id() }}) {
+                            isOwn = true;
+                        }
+                        
+                        messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+                        
+                        const bubble = document.createElement('div');
+                        bubble.className = 'message-bubble';
+                        
+                        // Xử lý attachments nếu có
+                        let attachmentsHtml = '';
+                        if (message.attachments && message.attachments.length > 0) {
+                            attachmentsHtml = message.attachments.map(att => 
+                                `<div class="attachment"><i class="fas fa-paperclip"></i> File đính kèm</div>`
+                            ).join('');
+                        }
+                        
+                        bubble.innerHTML = `
+                            <div>${message.body || ''}</div>
+                            ${attachmentsHtml}
+                            <div class="message-time">${new Date(message.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'})}</div>
+                        `;
+                        
+                        messageDiv.appendChild(bubble);
+                        chatMessages.appendChild(messageDiv);
+                        
+                        if (!isOwn && !isWidgetOpen) {
+                            unreadMessages++;
+                            updateUnreadCount();
+                        }
+                    }
+
+                    function showMessage(text, type = 'system') {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message system';
+                        messageDiv.innerHTML = `
+                            <div class="message-bubble" style="background: #ffc107; color: #000;">
+                                ${text}
+                            </div>
+                        `;
+                        chatMessages.appendChild(messageDiv);
+                        scrollToBottom();
+                    }
+
+                    function scrollToBottom() {
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
+
+                    function setupRealtime() {
+                        if (!currentChat || !window.Echo) return;
+
+                        // Listen for new messages
+                        window.Echo.private(`chat.${currentChat}`)
+                            .listen('.message.sent', (e) => {
+                                // Chỉ hiển thị tin nhắn từ Echo nếu không phải từ chính mình gửi
+                                if (e.sender_id !== {{ auth()->id() }}) {
+                                    displayMessage(e);
+                                    scrollToBottom();
+                                }
+                            })
+                            .listen('.chat.typing', (e) => {
+                                if (e.is_admin) {
+                                    typingIndicator.style.display = e.typing ? 'flex' : 'none';
+                                }
+                            });
+
+                        // Admin presence
+                        window.Echo.join('presence.admins')
+                            .here((users) => {
+                                adminStatus.textContent = users.length ? 'Admin đang online' : 'Admin offline';
+                            })
+                            .joining((user) => {
+                                adminStatus.textContent = 'Admin đang online';
+                            })
+                            .leaving((user) => {
+                                adminStatus.textContent = 'Admin offline';
+                            });
+                    }
+
+                    // Send message
+                    chatForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        
+                        const message = messageInput.value.trim();
+                        const files = fileInput.files;
+                        
+                        if (!message && !files.length) return;
+                        
+                        const formData = new FormData();
+                        if (message) formData.append('body', message);
+                        
+                        for (let file of files) {
+                            formData.append('files[]', file);
+                        }
+                        
+                        axios.post(`/chat/${currentChat}/messages`, formData, {
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        })
+                            .then(response => {
+                                messageInput.value = '';
+                                fileInput.value = '';
+                                
+                                // Hiển thị tin nhắn ngay lập tức
+                                if (response.data && response.data.message) {
+                                    displayMessage(response.data.message);
+                                    scrollToBottom();
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error sending message:', error);
+                                showMessage('Không thể gửi tin nhắn. Vui lòng thử lại.', 'system');
+                            });
+                    });
+
+                    // Typing indicator
+                    messageInput.addEventListener('input', function() {
+                        if (!currentChat) return;
+                        
+                        axios.post(`/chat/${currentChat}/typing`, { typing: true }, {
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                            }
+                        });
+                        
+                        clearTimeout(typingTimer);
+                        typingTimer = setTimeout(() => {
+                            axios.post(`/chat/${currentChat}/typing`, { typing: false }, {
+                                headers: {
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                                }
+                            });
+                        }, 1000);
+                    });
+                });
+            </script>
+        @endif
+    @endauth
+    
     @stack('scripts')
 </body>
 

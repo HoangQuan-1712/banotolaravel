@@ -9,6 +9,11 @@ use App\Http\Controllers\AdminController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use App\Http\Controllers\User\OrderController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\Admin\ReviewResponseController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\MessageController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +29,7 @@ use App\Http\Controllers\User\OrderController;
 Route::get('/', function () {
     return redirect()->route('products.index');
 });
+
 
 // Auth routes
 Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
@@ -103,6 +109,14 @@ Route::group(['prefix' => 'admin', 'middleware' => 'admin'], function () {
 
     // Admin Dashboard Routes
     Route::get('dashboard', [App\Http\Controllers\AdminDashboardController::class, 'index'])->name('admin.dashboard.index');
+    
+    // Admin Review Management Routes
+    Route::get('reviews', [App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('admin.reviews.index');
+    Route::get('reviews/{review}', [App\Http\Controllers\Admin\ReviewController::class, 'show'])->name('admin.reviews.show');
+    Route::patch('reviews/{review}/status', [App\Http\Controllers\Admin\ReviewController::class, 'updateStatus'])->name('admin.reviews.update-status');
+    Route::post('reviews/{review}/respond', [App\Http\Controllers\Admin\ReviewController::class, 'respond'])->name('admin.reviews.respond');
+    Route::delete('reviews/{review}', [App\Http\Controllers\Admin\ReviewController::class, 'destroy'])->name('admin.reviews.destroy');
+    Route::get('products/{product}/reviews', [App\Http\Controllers\Admin\ReviewController::class, 'byProduct'])->name('admin.reviews.by-product');
     Route::get('dashboard/reports', [App\Http\Controllers\AdminDashboardController::class, 'reports'])->name('admin.dashboard.reports');
     Route::get('dashboard/settings', [App\Http\Controllers\AdminDashboardController::class, 'settings'])->name('admin.dashboard.settings');
     Route::post('dashboard/settings', [App\Http\Controllers\AdminDashboardController::class, 'updateSettings'])->name('admin.dashboard.update-settings');
@@ -164,6 +178,9 @@ Route::middleware(['auth'])->group(function () {
     // Lịch sử đơn hàng và xem chi tiết
     Route::get('/orders', [OrderController::class, 'orderHistory'])->name('user.orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('user.orders.show');
+    
+    // Reviews
+    Route::post('/reviews/store', [OrderController::class, 'storeReview'])->name('reviews.store');
 });
 
 // Wishlist routes
@@ -203,7 +220,44 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/addresses/{address}/set-default', [App\Http\Controllers\UserAddressController::class, 'setDefault'])->name('user.addresses.set-default');
     Route::get('/api/addresses', [App\Http\Controllers\UserAddressController::class, 'getAddresses'])->name('user.addresses.api');
 });
-
 // Callback và IPN không cần auth (MoMo gọi trực tiếp)
 Route::get('/payment/momo/callback', [OrderController::class, 'callback'])->name('user.payment.momo.callback');
 Route::post('/payment/momo/ipn', [OrderController::class, 'ipn'])->name('user.payment.momo.ipn');
+
+Route::middleware('auth')->group(function () {
+    Route::post('/products/{product}/reviews', [ReviewController::class, 'store'])
+        ->name('reviews.store'); // expects product_id + order_id + rating + content + images[]
+
+    Route::get('/reviews/{review}/edit', [ReviewController::class, 'edit'])
+        ->name('reviews.edit'); // form sửa nội dung
+
+    Route::put('/reviews/{review}', [ReviewController::class, 'update'])
+        ->name('reviews.update'); // chỉ sửa 'content'
+});
+
+// ===== Admin side: Review Responses =====
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('/reviews/{review}/response', [ReviewResponseController::class, 'store'])
+        ->name('reviews.response.store');
+    Route::put('/reviews/{review}/response', [ReviewResponseController::class, 'update'])
+        ->name('reviews.response.update');
+    Route::delete('/reviews/{review}/response', [ReviewResponseController::class, 'destroy'])
+        ->name('reviews.response.destroy');
+});
+Route::middleware('auth')->group(function () {
+    // Hộp chat phía user (mở/tạo chat cá nhân)
+    Route::get('/chat', [ChatController::class, 'open'])->name('chat.open');
+
+    // API messages
+    Route::get('/chat/{chat}/messages', [MessageController::class, 'index'])->name('chat.messages.index');
+    Route::post('/chat/{chat}/messages', [MessageController::class, 'store'])->name('chat.messages.store');
+    Route::post('/chat/{chat}/typing', [MessageController::class, 'typing'])->name('chat.typing');
+
+    // Admin chat console
+    Route::middleware('admin')->group(function () {
+        Route::get('/admin/chats', [ChatController::class, 'adminIndex'])->name('admin.chats.index');
+        Route::get('/admin/chats/{chat}', [ChatController::class, 'adminShow'])->name('admin.chats.show');
+        Route::post('/admin/chats/{chat}/assign', [ChatController::class, 'assign'])->name('admin.chats.assign');
+        Route::post('/admin/chats/{chat}/close',  [ChatController::class, 'close'])->name('admin.chats.close');
+    });
+});

@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\{Order, Product, Category, ProductImage};
+use App\Services\{MoMoService, VoucherService, TierService};
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\{Auth, Log, DB};
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\UserAddress;
 use App\Models\Review;
@@ -27,7 +27,7 @@ class OrderController extends Controller
     {
         $cart = session('cart', []);
         if (empty($cart)) {
-            return redirect()->route('user.cart.index')->with('error', 'Giỏ hàng của bạn đang trống.');
+            return redirect()->route('cart.index')->with('error', 'Giỏ hàng của bạn đang trống.');
         }
 
         // Tính tổng tiền để hiển thị trong form
@@ -55,7 +55,7 @@ class OrderController extends Controller
 
         $cart = session('cart', []);
         if (empty($cart)) {
-            return redirect()->route('user.cart.index')
+            return redirect()->route('cart.index')
                 ->with('error', 'Không thể thanh toán vì giỏ hàng trống.');
         }
 
@@ -101,6 +101,32 @@ class OrderController extends Controller
                     'price' => $item['price'],
                 ]);
             }
+        }
+
+        // Nếu người dùng bấm nút "Chọn voucher/Quà tặng" thì luôn điều hướng sang trang chọn ưu đãi
+        if ($request->boolean('preview_voucher')) {
+            // Xoá giỏ và chuyển đến trang chọn voucher (nếu không có sẽ hiển thị thông báo không có ưu đãi)
+            session()->forget('cart');
+            return redirect()->route('vouchers.choices', $order)
+                ->with('info', 'Hãy xem ưu đãi khả dụng cho đơn hàng của bạn');
+        }
+
+        // Trước khi điều hướng thanh toán: nếu có ưu đãi khả dụng thì điều hướng sang trang chọn voucher/quà tặng
+        try {
+            $voucherService = new VoucherService();
+            $available = $voucherService->getAvailableVouchers($order, auth()->user());
+            $hasVouchers = ($available['tiered_choices']->isNotEmpty())
+                || ($available['random_gift'] !== null)
+                || ($available['vip_tier']->isNotEmpty());
+
+            if ($hasVouchers) {
+                // Xoá giỏ trước khi rẽ sang trang voucher
+                session()->forget('cart');
+                return redirect()->route('vouchers.choices', $order)
+                    ->with('success', 'Chọn voucher/quà tặng dành riêng cho bạn trước khi thanh toán.');
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Check vouchers failed for order ' . $order->id . ': ' . $e->getMessage());
         }
 
         // ✅ XÓA GIỎ HÀNG NGAY KHI NHẤN THANH TOÁN (kể cả MoMo chưa thành công)
@@ -230,6 +256,9 @@ class OrderController extends Controller
                 } catch (\Throwable $e) {
                     \Log::error('Reserve stock failed for MoMo order ' . $order->id . ': ' . $e->getMessage());
                 }
+                
+                // Process vouchers and tier upgrade after successful payment
+                $this->processOrderCompletion($order);
             }
             return redirect()->route('user.orders.index')
                 ->with('success', 'Đặt cọc MoMo thành công! Số tiền cọc: ' . number_format($order->total_price * 0.3, 0, ',', '.') . ' $');
@@ -388,5 +417,95 @@ class OrderController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Đánh giá của bạn đã được gửi thành công!');
+    }
+
+    /**
+     * Process order completion - handle tier upgrades and voucher eligibility
+     */
+    private function processOrderCompletion(Order $order)
+    {
+        try {
+            $user = $order->user;
+            $tierService = new TierService();
+            
+            // Check for tier upgrade
+            $tierUpgrade = $tierService->checkTierUpgrade($user, $order);
+            
+            if ($tierUpgrade['upgraded']) {
+                // Store tier upgrade message in session
+                session()->flash('tier_upgrade', $tierUpgrade['message']);
+                
+                // Log tier upgrade
+                Log::info("User {$user->id} upgraded tier", [
+                    'old_tier' => $tierUpgrade['old_tier']?->name,
+                    'new_tier' => $tierUpgrade['new_tier']?->name,
+                    'order_id' => $order->id,
+                    'total_spent' => $user->lifetime_spent
+                ]);
+            }
+            
+            // Check for available vouchers
+            $voucherService = new VoucherService();
+            $availableVouchers = $voucherService->getAvailableVouchers($order, $user);
+            
+            $hasVouchers = $availableVouchers['tiered_choices']->isNotEmpty() || 
+                          $availableVouchers['random_gift'] !== null || 
+                          $availableVouchers['vip_tier']->isNotEmpty();
+            
+            if ($hasVouchers) {
+                // Store voucher availability in session
+                session()->flash('vouchers_available', true);
+                session()->flash('order_id_for_vouchers', $order->id);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Error processing order completion', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Show voucher selection page after order completion
+     */
+    public function showVouchers(Order $order)
+    {
+        // Ensure user owns this order
+        if ($order->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized access to order');
+        }
+
+        // Redirect to voucher controller
+        return redirect()->route('vouchers.choices', $order);
+    }
+
+    /**
+     * Mark order as completed (for admin or after full payment)
+     */
+    public function markAsCompleted(Order $order)
+    {
+        if ($order->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized');
+        }
+
+        DB::transaction(function() use ($order) {
+            $order->update(['status' => Order::STATUS_COMPLETED]);
+            $this->processOrderCompletion($order);
+        });
+
+        $message = 'Order completed successfully!';
+        
+        if (session()->has('tier_upgrade')) {
+            $message .= ' ' . session()->get('tier_upgrade');
+        }
+        
+        if (session()->has('vouchers_available')) {
+            return redirect()->route('vouchers.choices', $order)
+                ->with('success', $message . ' Check out your exclusive rewards!');
+        }
+
+        return redirect()->route('user.orders.show', $order)
+            ->with('success', $message);
     }
 }

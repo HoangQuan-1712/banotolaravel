@@ -148,8 +148,9 @@
 </div>
 
 {{-- Scripts --}}
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-<script src="{{ asset('js/echo.pusher.min.js') }}"></script>
+<script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+<script src="{{ asset('js/echo-setup.js') }}"></script>
+<script src="{{ asset('js/chat-realtime.js') }}"></script>
 <script>
 const chatId = {{ $chat->id }};
 const adminId = {{ auth()->id() }};
@@ -159,85 +160,139 @@ const fileEl = document.getElementById('admin-file-input');
 const typingEl = document.getElementById('admin-typing-indicator');
 const userOnlineStatus = document.getElementById('user-online-status');
 
-function appendMessage(m) {
-    const isAdmin = m.sender.is_admin;
+// Custom message formatter for admin view
+function formatAdminMessage(message, shouldScroll = true) {
+    const isAdmin = message.sender.is_admin;
     const side = isAdmin ? 'end' : 'start';
     const bgColor = isAdmin ? 'primary' : 'light';
     const textColor = isAdmin ? 'white' : 'dark';
     
     const wrapper = document.createElement('div');
     wrapper.className = `mb-3 d-flex justify-content-${side}`;
+    wrapper.setAttribute('data-message-id', message.id);
     
     let files = '';
-    if (m.attachments && m.attachments.length) {
+    if (message.attachments && message.attachments.length) {
         files = '<div class="mt-2 d-flex flex-wrap gap-1">' +
-            m.attachments.map(a => `<a target="_blank" href="${a.url}" class="btn btn-sm btn-outline-secondary">
+            message.attachments.map(a => `<a target="_blank" href="${a.url}" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-paperclip"></i> File
             </a>`).join('') + '</div>';
     }
     
+    const messageTime = new Date(message.created_at).toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit'
+    });
+    
     wrapper.innerHTML = `
         <div class="border rounded p-3 bg-${bgColor} text-${textColor}" style="max-width:75%">
             <div class="small opacity-75 mb-1">
-                ${isAdmin ? 'Admin' : (m.sender.name || 'Khách')} • 
-                ${new Date(m.created_at).toLocaleString()}
+                ${isAdmin ? 'Admin' : (message.sender.name || 'Khách')} • ${messageTime}
             </div>
-            <div>${m.body ? m.body.replace(/</g,'&lt;') : ''}</div>
+            <div>${message.body ? message.body.replace(/</g,'&lt;').replace(/\n/g, '<br>') : ''}</div>
             ${files}
         </div>
     `;
-    messagesEl.appendChild(wrapper);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    
+    return wrapper;
 }
 
-// Load messages (oldest to newest)
-axios.get(`{{ route('chat.messages.index', $chat) }}`).then(res => {
-    messagesEl.innerHTML = '';
-    (Array.isArray(res.data) ? res.data : []).forEach(appendMessage);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-});
-
-// Echo setup
-window.Echo.private(`chat.${chatId}`)
-    .listen('.message.sent', (e) => { appendMessage(e); })
-    .listen('.chat.typing', (e) => {
-        if (!e.is_admin) {
-            typingEl.style.display = e.typing ? 'block' : 'none';
+// Initialize admin hybrid chat system
+const adminChatSystem = new ChatRealtime(chatId, messagesEl, {
+    pollingInterval: 2000, // Faster polling for admin
+    onNewMessage: (message, shouldScroll = true) => {
+        const messageElement = formatAdminMessage(message, shouldScroll);
+        messagesEl.appendChild(messageElement);
+        
+        if (shouldScroll) {
+            // Force scroll to bottom with a small delay
+            setTimeout(() => {
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }, 50);
         }
-    });
-
-// Send typing
-let typingTimer;
-inputEl.addEventListener('input', () => {
-    axios.post(`{{ route('chat.typing', $chat) }}`, { typing: true });
-    clearTimeout(typingTimer);
-    typingTimer = setTimeout(() => {
-        axios.post(`{{ route('chat.typing', $chat) }}`, { typing: false });
-    }, 1200);
+        
+        // Show notification for user messages
+        if (!message.sender.is_admin) {
+            showAdminNotification('Tin nhắn mới từ khách hàng', message.body);
+            // Update page title to show new message
+            updatePageTitle(true);
+        }
+    },
+    onError: (error) => {
+        console.error('Admin chat system error:', error);
+        showErrorToast('Lỗi kết nối chat. Đang thử kết nối lại...');
+    },
+    onConnectionChange: (connected, type) => {
+        console.log(`[ADMIN CHAT] Connection: ${connected ? 'connected' : 'disconnected'} via ${type}`);
+    },
+    onTyping: (event) => {
+        if (!event.is_admin) {
+            typingEl.style.display = event.typing ? 'block' : 'none';
+        }
+    }
 });
+
+// Load initial messages
+messagesEl.innerHTML = '<div class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Đang tải tin nhắn...</div>';
+adminChatSystem.loadInitialMessages();
+
+// Update user online status (simplified)
+function updateUserOnlineStatus() {
+    // Simple logic - you can enhance this with actual user activity tracking
+    userOnlineStatus.className = 'badge bg-success';
+    userOnlineStatus.textContent = 'Đang hoạt động';
+}
+
+updateUserOnlineStatus();
+setInterval(updateUserOnlineStatus, 30000); // Update every 30 seconds
 
 // Send message
-document.getElementById('admin-chat-form').addEventListener('submit', function(e) {
+document.getElementById('admin-chat-form').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const text = inputEl.value.trim();
-    const form = new FormData();
     
-    if (text.length) form.append('body', text);
-    if (fileEl.files.length) {
-        for (const f of fileEl.files) form.append('files[]', f);
+    const text = inputEl.value.trim();
+    const files = fileEl.files;
+    
+    if (!text && files.length === 0) {
+        showErrorToast('Vui lòng nhập tin nhắn hoặc chọn file');
+        return;
     }
     
-    if (!text.length && !fileEl.files.length) return;
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalHtml = submitBtn.innerHTML;
     
-    axios.post(`{{ route('chat.messages.store', $chat) }}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-    }).then(res => {
+    try {
+        // Disable submit button
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang gửi...';
+        
+        // Prepare form data
+        const formData = new FormData();
+        if (text) formData.append('body', text);
+        
+        for (const file of files) {
+            formData.append('files[]', file);
+        }
+        
+        // Send message using hybrid chat system
+        await adminChatSystem.sendMessage(formData);
+        
+        // Clear form
         inputEl.value = '';
-        fileEl.value = null;
-        // Message sẽ được hiển thị qua Echo broadcast
-    }).catch(err => {
-        alert('Lỗi gửi tin nhắn: ' + (err.response?.data?.message || 'Không xác định'));
-    });
+        fileEl.value = '';
+        
+        showSuccessToast('Tin nhắn đã được gửi');
+        
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showErrorToast('Lỗi gửi tin nhắn. Vui lòng thử lại.');
+    } finally {
+        // Re-enable submit button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
+    }
 });
 
 // Quick messages
@@ -247,5 +302,96 @@ document.querySelectorAll('.quick-message').forEach(btn => {
         inputEl.focus();
     });
 });
+
+// Utility functions for admin notifications
+function showAdminNotification(title, body) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { 
+            body: body.substring(0, 100),
+            icon: '/favicon.ico'
+        });
+    }
+}
+
+function showSuccessToast(message) {
+    showToast(message, 'success');
+}
+
+function showErrorToast(message) {
+    showToast(message, 'error');
+}
+
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'}"></i> ${message}</span>
+            <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 5000);
+}
+
+// Page title notification
+let originalTitle = document.title;
+let hasNewMessages = false;
+
+function updatePageTitle(newMessage = false) {
+    if (newMessage) {
+        hasNewMessages = true;
+        document.title = '(!) ' + originalTitle;
+    } else {
+        hasNewMessages = false;
+        document.title = originalTitle;
+    }
+}
+
+// Reset title when page becomes visible
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && hasNewMessages) {
+        updatePageTitle(false);
+    }
+});
+
+// Request notification permission
+if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+}
+
+// Handle page visibility change to adjust polling frequency
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        // Page is hidden, reduce polling frequency
+        if (adminChatSystem.options) {
+            adminChatSystem.options.pollingInterval = 5000; // 5 seconds
+        }
+    } else {
+        // Page is visible, normal polling frequency
+        if (adminChatSystem.options) {
+            adminChatSystem.options.pollingInterval = 2000; // 2 seconds
+        }
+        // Reset new message indicator
+        updatePageTitle(false);
+    }
+});
+
+// Clean up when page unloads
+window.addEventListener('beforeunload', function() {
+    adminChatSystem.disconnect();
+});
+
+// Auto-focus on message input
+inputEl.focus();
 </script>
 @endsection

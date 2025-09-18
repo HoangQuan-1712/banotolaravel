@@ -13,6 +13,8 @@ use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\Admin\ReviewResponseController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\VoucherController;
+use App\Http\Controllers\User\OrderController as UserOrderController;
 
 
 /*
@@ -27,8 +29,24 @@ use App\Http\Controllers\MessageController;
 */
 
 Route::get('/', function () {
-    return redirect()->route('products.index');
-});
+    $brands = \App\Models\Category::query()
+        ->orderBy('name')
+        ->get(['id','name']);
+
+    $featuredProducts = \App\Models\Product::query()
+        ->orderByDesc('price')
+        ->take(8)
+        ->get();
+
+    // Mark top 3 as VIP by price (can be adjusted later)
+    $vipIds = $featuredProducts->take(3)->pluck('id')->toArray();
+
+    return view('welcome', [
+        'brands' => $brands,
+        'featuredProducts' => $featuredProducts,
+        'vipIds' => $vipIds,
+    ]);
+})->name('welcome');
 
 
 // Auth routes
@@ -50,7 +68,7 @@ Route::get('/email/verify', function () {
 // Xử lý link xác nhận (từ email)
 Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
     $request->fulfill();
-    return redirect()->route('categories.index'); // Redirect về trang chủ
+    return redirect()->route('welcome'); // Redirect về trang chào mừng
 })->middleware(['auth', 'signed'])->name('verification.verify');
 
 // Gửi lại email xác nhận
@@ -147,11 +165,7 @@ Route::prefix('user')->name('user.')->group(function () {
     Route::resource('categories', CategoryController::class);
 });
 
-Route::prefix('user')->name('user.')->group(function () {
-    Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
-    Route::post('/cart/add/{id}', [CartController::class, 'add'])->name('cart.add');
-    Route::post('/cart/remove/{id}', [CartController::class, 'remove'])->name('cart.remove');
-});
+// Removed guest-accessible cart routes to ensure only authenticated users can purchase
 
 // Cart routes
 Route::middleware(['auth'])->group(function () {
@@ -260,4 +274,55 @@ Route::middleware('auth')->group(function () {
         Route::post('/admin/chats/{chat}/assign', [ChatController::class, 'assign'])->name('admin.chats.assign');
         Route::post('/admin/chats/{chat}/close',  [ChatController::class, 'close'])->name('admin.chats.close');
     });
+        // Voucher routes (inside auth group already)
+        Route::get('/checkout/vouchers/{order}', [VoucherController::class,'showChoices'])->name('vouchers.choices');
+        Route::post('/checkout/vouchers/{order}/apply', [VoucherController::class,'applyChoice'])->name('vouchers.apply');
+        Route::post('/checkout/vouchers/{order}/random', [VoucherController::class,'randomGift'])->name('vouchers.random');
+        Route::get('/api/vouchers/{order}', [VoucherController::class,'getAvailableVouchers'])->name('vouchers.api');
+        Route::get('/api/vouchers/preview', [VoucherController::class,'preview'])->name('vouchers.preview');
+        // User dashboard route
+        Route::get('/dashboard', function() {
+            return view('user.dashboard');
+        })->name('user.dashboard');
+        
+        // Order voucher routes
+        Route::get('/orders/{order}/vouchers', [App\Http\Controllers\User\OrderController::class, 'showVouchers'])->name('user.orders.vouchers');
+        Route::post('/orders/{order}/complete', [App\Http\Controllers\User\OrderController::class, 'markAsCompleted'])->name('user.orders.complete');
+        
+        // Test voucher system
+        Route::get('/test/voucher-system', function() {
+            return view('test.voucher-system');
+        })->name('test.voucher.system');
+        
+        // Test chat system
+        Route::get('/test/chat-system', function() {
+            return view('test.chat-test');
+        })->name('test.chat.system');
+        
+        // Debug chat API
+        Route::get('/debug/chat-api', function() {
+            $user = auth()->user();
+            $chat = \App\Models\Chat::where('user_id', $user->id)->where('status', 'open')->first();
+            
+            if (!$chat) {
+                return response()->json(['error' => 'No active chat found']);
+            }
+            
+            $messages = $chat->messages()->with(['sender', 'attachments'])->orderBy('created_at')->get();
+            
+            return response()->json([
+                'chat_id' => $chat->id,
+                'user_id' => $user->id,
+                'messages_count' => $messages->count(),
+                'messages' => $messages->map(function($message) {
+                    return [
+                        'id' => $message->id,
+                        'body' => $message->body,
+                        'sender_is_admin' => $message->sender_is_admin,
+                        'created_at' => $message->created_at,
+                        'created_at_iso' => $message->created_at->toISOString(),
+                    ];
+                })
+            ]);
+        });
 });

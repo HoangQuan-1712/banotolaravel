@@ -26,6 +26,7 @@
                             <form id="paymentForm" method="POST" action="{{ route('user.payment.process') }}">
                                 @csrf
 <meta name="csrf-token" content="{{ csrf_token() }}">
+                                <input type="hidden" name="preview_voucher" id="preview_voucher" value="0">
                                 
                                 <!-- Địa chỉ giao hàng (Shopee style) -->
                                 <div class="mb-3">
@@ -128,6 +129,10 @@
 
                                 <!-- Nút thanh toán -->
                                 <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-warning" 
+                                        onclick="document.getElementById('preview_voucher').value='1'">
+                                        <i class="fas fa-gift"></i> Chọn voucher / Quà tặng
+                                    </button>
                                     <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
                                         <i class="fas fa-lock"></i> Xác nhận đặt cọc
                                     </button>

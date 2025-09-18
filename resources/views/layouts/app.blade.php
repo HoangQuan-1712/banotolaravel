@@ -615,7 +615,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-custom mb-4">
         <div class="container">
-            <a class="navbar-brand" href="{{ route('categories.index') }}">
+            <a class="navbar-brand" href="{{ route('welcome') }}">
                 <i class="fas fa-car brand-icon"></i> 
                 <span class="brand-text">AutoDealer</span>
             </a>
@@ -628,6 +628,11 @@
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ route('categories.index') }}">
                                     <i class="fas fa-tags"></i> <span class="d-none d-lg-inline">Danh Mục</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ route('products.index') }}">
+                                    <i class="fas fa-car-side"></i> <span class="d-none d-lg-inline">Tất Cả Xe</span>
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -776,58 +781,10 @@
         @yield('content')
     </main>
 
-    <!-- Live Chat Widget (chỉ hiển thị cho user đã đăng nhập và không phải admin) -->
+    <!-- Live Chat Widget (authenticated non-admin) -->
     @auth
         @if(!auth()->user()->isAdmin())
-            <!-- Chat Button -->
-            <div id="live-chat-button" class="live-chat-button">
-                <i class="fas fa-comments"></i>
-                <span class="chat-text">Live Chat</span>
-                <span id="unread-count" class="unread-count" style="display: none;">0</span>
-            </div>
-
-            <!-- Chat Widget -->
-            <div id="chat-widget" class="chat-widget" style="display: none;">
-                <div class="chat-header">
-                    <div class="chat-title">
-                        <i class="fas fa-comments"></i>
-                        <span>Hỗ trợ trực tuyến</span>
-                    </div>
-                    <div class="chat-controls">
-                        <span id="admin-status" class="admin-status">Đang kết nối...</span>
-                        <button id="minimize-chat" class="btn-minimize">
-                            <i class="fas fa-minus"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="chat-messages" class="chat-messages">
-                    <div class="loading-message">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <span>Đang tải...</span>
-                    </div>
-                </div>
-                
-                <div class="chat-input-area">
-                    <div id="typing-indicator" class="typing-indicator" style="display: none;">
-                        <i class="fas fa-ellipsis-h"></i>
-                        <span>Admin đang nhập...</span>
-                    </div>
-                    <form id="chat-form" class="chat-form">
-                        @csrf
-                        <div class="input-group">
-                            <input type="text" id="message-input" class="form-control" placeholder="Nhập tin nhắn..." autocomplete="off">
-                            <input type="file" id="file-input" name="files[]" multiple style="display: none;" accept="image/*,.pdf,.doc,.docx">
-                            <button type="button" id="attach-btn" class="btn btn-outline-secondary">
-                                <i class="fas fa-paperclip"></i>
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+            @include('components.chat-widget')
         @endif
     @endauth
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -851,9 +808,9 @@
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Live Chat JavaScript -->
+    <!-- Live Chat JavaScript (disabled) -->
     @auth
-        @if(!auth()->user()->isAdmin())
+        @if(false)
             <script src="{{ asset('js/echo.pusher.min.js') }}"></script>
             <script>
                 document.addEventListener('DOMContentLoaded', function() {
@@ -1110,6 +1067,8 @@
     @endauth
     
     @stack('scripts')
+
+    {{-- Include Chat Widget moved above (under authenticated non-admin check) --}}
 </body>
 
 </html>

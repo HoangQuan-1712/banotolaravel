@@ -10,16 +10,25 @@ class ChatController extends Controller
     // Tạo hoặc lấy chat hiện tại của user
     public function open(Request $request)
     {
-        $this->middleware('auth');
+        // Middleware auth đã được apply ở routes, không cần gọi lại ở đây
+        
+        $user = $request->user();
+        if (!$user) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['error' => 'Unauthorized'], 401);
+            }
+            return redirect()->route('login');
+        }
 
         $chat = Chat::firstOrCreate(
-            ['user_id' => $request->user()->id, 'status' => 'open'],
+            ['user_id' => $user->id, 'status' => 'open'],
             ['last_message_at' => now()]
         );
 
         // Nếu request từ AJAX, trả về JSON
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json([
+                'success' => true,
                 'chat_id' => $chat->id,
                 'status' => $chat->status,
                 'user_id' => $chat->user_id

@@ -119,6 +119,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->orders()->where('status', Order::STATUS_COMPLETED)->exists();
     }
+    public function tier(){ return $this->belongsTo(CustomerTier::class,'tier_id'); }
 
     // Lấy thông tin tóm tắt về đơn hàng để hiển thị khi admin xóa user
     public function getOrderSummaryAttribute()

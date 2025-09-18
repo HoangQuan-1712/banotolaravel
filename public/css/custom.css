@@ -310,3 +310,111 @@ body {
     color: #6c757d;
     font-size: 1.2rem;
 }
+
+/* ================================ */
+/* Live Chat (Customer) - UI Styles */
+/* Scoped under .chat-page to avoid global side-effects */
+/* ================================ */
+
+.chat-page .card {
+    border: none;
+    border-radius: 18px;
+    box-shadow: 0 12px 30px rgba(35, 43, 85, 0.12);
+}
+
+.chat-page .card-header {
+    background: linear-gradient(135deg, #7b5cff 0%, #6a6dfd 40%, #5b8def 100%) !important;
+    color: #fff;
+    border-top-left-radius: 18px !important;
+    border-top-right-radius: 18px !important;
+    border-bottom: none;
+}
+
+.chat-page .card-header .badge {
+    background: rgba(255,255,255,0.2) !important;
+    font-weight: 600;
+}
+
+.chat-page #messages {
+    background: #f5f7fb;
+    padding: 16px 14px;
+    border-bottom-left-radius: 18px;
+    border-bottom-right-radius: 18px;
+}
+
+/* Message bubbles */
+.chat-page .message .d-inline-block {
+    border-radius: 16px !important;
+    padding: 10px 14px !important;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.06);
+}
+
+/* Outgoing (current user) bubble overrides Bootstrap bg-primary */
+.chat-page .message .bg-primary {
+    background: linear-gradient(135deg, #7b5cff 0%, #5b8def 100%) !important;
+    border: none;
+}
+
+/* Incoming bubble */
+.chat-page .message .bg-light {
+    background: #ffffff !important;
+    border: 1px solid #eef0f6;
+}
+
+.chat-page .message small {
+    font-size: 0.72rem;
+}
+
+/* Footer / input bar */
+.chat-page .card-footer {
+    background: #fff;
+    border-top: 1px solid #eef0f6;
+    border-bottom-left-radius: 18px !important;
+    border-bottom-right-radius: 18px !important;
+}
+
+.chat-page #msg-input.form-control {
+    height: 50px;
+    border-radius: 14px;
+    border: 1px solid #e6e8f0;
+    background: #fbfcff;
+}
+
+.chat-page #file-input.form-control {
+    height: 50px;
+    border-radius: 14px;
+    border: 1px dashed #d7dbeb;
+    background: #fcfdff;
+}
+
+.chat-page #file-input.form-control::-webkit-file-upload-button,
+.chat-page #file-input.form-control::file-selector-button {
+    border: none;
+    background: #eef1ff;
+    color: #4b57d2;
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin-right: 10px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.chat-page button.btn.btn-primary {
+    height: 50px;
+    border-radius: 14px;
+    padding: 0 18px;
+    background: linear-gradient(135deg, #1ea7ff 0%, #1273ea 100%);
+    border: none;
+    box-shadow: 0 10px 20px rgba(18, 115, 234, 0.2);
+}
+
+.chat-page #typing-indicator {
+    color: #7a8196 !important;
+}
+
+/* Subtle custom scrollbar for messages */
+.chat-page #messages::-webkit-scrollbar { width: 8px; }
+.chat-page #messages::-webkit-scrollbar-thumb {
+    background: #d7dbeb; border-radius: 10px;
+}
+.chat-page #messages::-webkit-scrollbar-track { background: transparent; }

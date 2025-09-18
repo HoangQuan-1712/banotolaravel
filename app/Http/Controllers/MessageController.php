@@ -35,10 +35,16 @@ class MessageController extends Controller
         }
 
         $before = $request->query('before'); // ISO datetime string
+        $after = $request->query('after'); // ISO datetime string for polling new messages
 
         $baseQuery = $chat->messages()->with(['sender', 'attachments']);
 
-        if ($before) {
+        if ($after) {
+            // Load messages newer than the provided timestamp (for polling)
+            $baseQuery->where('created_at', '>', $after)
+                ->orderBy('created_at');
+            $collection = $baseQuery->get();
+        } elseif ($before) {
             // Load older than the provided timestamp (for infinite scroll up)
             $baseQuery->where('created_at', '<', $before)
                 ->orderByDesc('created_at')
@@ -61,8 +67,17 @@ class MessageController extends Controller
                     'name' => $message->sender->name ?? 'User',
                     'is_admin' => (bool)$message->sender_is_admin,
                 ],
-                'attachments' => $message->attachments,
+                'attachments' => $message->attachments->map(function($attachment) {
+                    return [
+                        'id' => $attachment->id,
+                        'path' => $attachment->path,
+                        'url' => asset('storage/' . $attachment->path),
+                        'mime' => $attachment->mime,
+                        'size' => $attachment->size,
+                    ];
+                }),
                 'created_at' => $message->created_at,
+                'created_at_iso' => $message->created_at->toISOString(),
             ];
         });
 
@@ -135,8 +150,17 @@ class MessageController extends Controller
                 'name' => $message->sender->name ?? 'User',
                 'is_admin' => (bool)$message->sender_is_admin,
             ],
-            'attachments' => $message->attachments,
+            'attachments' => $message->attachments->map(function($attachment) {
+                return [
+                    'id' => $attachment->id,
+                    'path' => $attachment->path,
+                    'url' => asset('storage/' . $attachment->path),
+                    'mime' => $attachment->mime,
+                    'size' => $attachment->size,
+                ];
+            }),
             'created_at' => $message->created_at,
+            'created_at_iso' => $message->created_at->toISOString(),
         ] : null;
 
         return response()->json(['ok' => true, 'message' => $responseMessage]);

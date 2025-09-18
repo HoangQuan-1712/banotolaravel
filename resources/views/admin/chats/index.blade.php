@@ -739,11 +739,15 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-<script src="{{ asset('js/echo.pusher.min.js') }}"></script>
+<!-- Realtime disabled on admin page to avoid conflicts; using polling-only -->
 <script>
 let currentChatId = null;
 let currentChatData = null;
 let typingTimer = null;
+let loadedMessageIds = new Set(); // avoid duplicates per session
+let infiniteScrollInitialized = false;
+let pollingTimer = null;
+let lastMessageTime = null;
 
 // Chọn chat
 function selectChat(chatId) {
@@ -756,7 +760,11 @@ function selectChat(chatId) {
     document.querySelector(`[data-chat-id="${chatId}"]`).classList.add('active');
     
     currentChatId = chatId;
+    loadedMessageIds.clear();
     loadChatData(chatId);
+    const messagesContainer = document.getElementById('chat-messages');
+    messagesContainer.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
+    // Initial load
     loadMessages(chatId);
     
     // Show chat interface
@@ -768,6 +776,12 @@ function selectChat(chatId) {
     if (unreadBadge) {
         unreadBadge.style.display = 'none';
         unreadBadge.textContent = '0';
+    }
+
+    // Init infinite scroll once
+    if (!infiniteScrollInitialized) {
+        setupInfiniteScroll(chatId);
+        infiniteScrollInitialized = true;
     }
 }
 
@@ -786,7 +800,7 @@ function loadChatData(chatId) {
 // Load messages
 function loadMessages(chatId) {
     const messagesContainer = document.getElementById('chat-messages');
-    messagesContainer.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
+    // keep spinner from selectChat
     
     axios.get(`/chat/${chatId}/messages`, {
         headers: {
@@ -801,6 +815,8 @@ function loadMessages(chatId) {
                 response.data.forEach(message => {
                     appendMessage(message);
                 });
+                const last = response.data[response.data.length - 1];
+                lastMessageTime = last.created_at_iso;
             } else {
                 messagesContainer.innerHTML = `<div class="text-center text-muted py-4">
                     <i class="fas fa-comments fa-3x mb-3"></i>
@@ -808,11 +824,12 @@ function loadMessages(chatId) {
                     <p>Hãy bắt đầu cuộc trò chuyện!</p>
                 </div>`;
             }
-            scrollToBottom();
-            // Set up infinite scroll to load older messages on reaching top
-            setupInfiniteScroll(chatId);
             // Always jump to the newest (bottom) on open
             scrollToBottom();
+            // Extra ensure after DOM paint
+            setTimeout(scrollToBottom, 50);
+            // Start polling for new messages
+            startPolling();
         })
         .catch(error => {
             console.error('Error loading messages:', error);
@@ -838,6 +855,14 @@ function loadMessages(chatId) {
 // Append message to chat
 function appendMessage(message) {
     const messagesContainer = document.getElementById('chat-messages');
+    // Safety: ignore messages from other chats if payload has chat_id
+    if (message.chat_id && Number(message.chat_id) !== Number(currentChatId)) {
+        return;
+    }
+    // Avoid duplicates
+    if (message.id && loadedMessageIds.has(message.id)) {
+        return;
+    }
     
     // Kiểm tra nhiều cách để xác định admin
     let isAdmin = false;
@@ -863,7 +888,8 @@ function appendMessage(message) {
     
     const messageDiv = document.createElement('div');
     messageDiv.className = `message-wrapper ${isAdmin ? 'sent' : 'received'}`;
-    messageDiv.setAttribute('data-created-at', message.created_at);
+    messageDiv.setAttribute('data-created-at', message.created_at_iso || message.created_at);
+    if (message.id) loadedMessageIds.add(message.id);
     
     let attachmentsHtml = '';
     if (message.attachments && message.attachments.length > 0) {
@@ -908,7 +934,9 @@ function appendMessage(message) {
     }
     
     messagesContainer.appendChild(messageDiv);
-    scrollToBottom();
+    // Do not force scroll here to respect user reading unless message belongs to current chat and near bottom
+    const nearBottom = (messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight) < 80;
+    if (nearBottom) scrollToBottom();
 }
 
 // Scroll to bottom
@@ -917,15 +945,16 @@ function scrollToBottom() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// Infinite scroll: load older messages when reaching top
+// Infinite scroll: load older messages when reaching top (delegate to realtime)
 function setupInfiniteScroll(chatId) {
     const container = document.getElementById('chat-messages');
     let loadingOlder = false;
+    let noMoreOlder = false;
     container.onscroll = async function() {
-        if (container.scrollTop <= 0 && !loadingOlder) {
+        if (container.scrollTop <= 0 && !loadingOlder && !noMoreOlder) {
             loadingOlder = true;
             const first = container.firstElementChild;
-            const oldestTime = first?.querySelector('[data-created-at]')?.getAttribute('data-created-at');
+            const oldestTime = first?.getAttribute('data-created-at');
             try {
                 const resp = await axios.get(`/chat/${chatId}/messages`, {
                     params: { before: oldestTime, limit: 50 },
@@ -937,12 +966,14 @@ function setupInfiniteScroll(chatId) {
                 if (Array.isArray(resp.data) && resp.data.length) {
                     const prevHeight = container.scrollHeight;
                     resp.data.forEach(m => {
-                        // prepend older messages
                         const el = buildMessageElement(m);
                         container.insertBefore(el, container.firstChild);
+                        if (m.id) loadedMessageIds.add(m.id);
                     });
                     const newHeight = container.scrollHeight;
-                    container.scrollTop = newHeight - prevHeight; // keep viewport position
+                    container.scrollTop = newHeight - prevHeight;
+                } else {
+                    noMoreOlder = true;
                 }
             } catch (e) {
                 console.error('Load older failed', e);
@@ -1042,6 +1073,42 @@ document.getElementById('message-input').addEventListener('keypress', function(e
     }
 });
 
+// Polling for new messages on active chat
+function startPolling() {
+    stopPolling();
+    if (!currentChatId) return;
+    const interval = 3000;
+    const tick = async () => {
+        try {
+            const params = lastMessageTime ? { after: lastMessageTime } : {};
+            const resp = await axios.get(`/chat/${currentChatId}/messages`, {
+                params,
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                }
+            });
+            if (Array.isArray(resp.data) && resp.data.length) {
+                resp.data.forEach(m => appendMessage(m));
+                const last = resp.data[resp.data.length - 1];
+                lastMessageTime = last.created_at_iso || last.created_at;
+            }
+        } catch (e) {
+            console.warn('Polling error', e);
+        } finally {
+            pollingTimer = setTimeout(tick, interval);
+        }
+    };
+    pollingTimer = setTimeout(tick, interval);
+}
+
+function stopPolling() {
+    if (pollingTimer) {
+        clearTimeout(pollingTimer);
+        pollingTimer = null;
+    }
+}
+
 // Refresh chats
 function refreshChats() {
     location.reload();
@@ -1102,32 +1169,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Listen for new messages on all chats
-@foreach($chats as $chat)
-window.Echo.private('chat.{{ $chat->id }}')
-    .listen('.message.sent', (e) => {
-        if (currentChatId == {{ $chat->id }}) {
-            // Chỉ hiển thị tin nhắn từ Echo nếu không phải từ chính mình gửi
-            // (để tránh duplicate khi đã hiển thị từ response)
-            if (e.sender_id !== {{ auth()->id() }}) {
-                appendMessage(e);
-                scrollToBottom(); // jump to latest when new comes in
-            }
-        } else {
-            // Update unread count and move to top
-            updateUnreadCount({{ $chat->id }});
-            moveToTop({{ $chat->id }});
-        }
-    })
-    .listen('.chat.typing', (e) => {
-        if (currentChatId == {{ $chat->id }} && !e.is_admin) {
-            const typingIndicator = document.getElementById('typing-indicator');
-            const typingUser = document.getElementById('typing-user');
-            typingUser.textContent = e.user_name;
-            typingIndicator.style.display = e.typing ? 'block' : 'none';
-        }
-    });
-@endforeach
+// Realtime listeners removed to avoid conflicts; polling will update unread/time via sidebar refresh if needed
 
 // Update unread count
 function updateUnreadCount(chatId) {

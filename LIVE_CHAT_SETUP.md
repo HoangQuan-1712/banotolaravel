@@ -98,3 +98,5 @@ composer require pusher/pusher-php-server
 php artisan config:cache
 php artisan route:cache
 ```
+npm run dev
+php artisan queue:work

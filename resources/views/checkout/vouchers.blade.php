@@ -223,7 +223,10 @@
     <!-- Back to Order -->
     <div class="text-center mt-4">
         <a href="{{ route('user.orders.show', $order) }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Back to Order Details
+            <i class="fas fa-arrow-left"></i> Quay lại chi tiết đơn hàng
+        </a>
+        <a href="{{ route('user.payment.index', ['order_id' => $order->id]) }}" class="btn btn-primary">
+            <i class="fas fa-credit-card"></i> Đi đến thanh toán
         </a>
     </div>
 </div>

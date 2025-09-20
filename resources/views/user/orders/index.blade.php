@@ -140,6 +140,30 @@
                                             <i class="fas fa-eye me-1"></i>
                                             Xem chi tiết
                                         </a>
+
+                                        @php
+                                            // Define statuses where user can take action
+                                            $cancelableStatuses = [
+                                                'chờ đặt cọc',
+                                                'thanh toán MoMo không thành công',
+                                                'chờ thanh toán',
+                                                \App\Models\Order::STATUS_AWAITING_DEPOSIT ?? 'chờ đặt cọc'
+                                            ];
+                                        @endphp
+
+                                        @if(in_array($order->status, $cancelableStatuses))
+                                            <a href="{{ route('user.orders.momo.pay', $order) }}" class="btn btn-success btn-sm ms-2">
+                                                <i class="fas fa-credit-card me-1"></i>
+                                                Tiếp tục đặt cọc
+                                            </a>
+                                            <form action="{{ route('user.orders.cancel', $order) }}" method="POST" class="d-inline ms-2" onsubmit="return confirm('Bạn có chắc chắn muốn hủy đơn hàng này?');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-danger btn-sm">
+                                                    <i class="fas fa-times me-1"></i>
+                                                    Hủy đơn
+                                                </button>
+                                            </form>
+                                        @endif
                                     </div>
                                 </div>
                             </div>

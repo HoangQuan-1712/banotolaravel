@@ -108,38 +108,41 @@
                                     <h5><i class="fas fa-user"></i> Thông Tin Khách Hàng</h5>
                                 </div>
                                 <div class="card-body">
+                                    @php($orderUser = $order->user)
                                     <table class="table table-borderless">
                                         <tr>
                                             <td><strong>Tên:</strong></td>
-                                            <td>{{ $order->user->name }}</td>
+                                            <td>{{ optional($orderUser)->name ?? 'Khách lẻ' }}</td>
                                         </tr>
                                         <tr>
                                             <td><strong>Email:</strong></td>
-                                            <td>{{ $order->user->email }}</td>
+                                            <td>{{ optional($orderUser)->email ?? '—' }}</td>
                                         </tr>
                                         <tr>
                                             <td><strong>Số Điện Thoại:</strong></td>
-                                            <td>{{ $order->user->phone ?? 'Chưa cập nhật' }}</td>
+                                            <td>{{ optional($orderUser)->phone ?? 'Chưa cập nhật' }}</td>
                                         </tr>
                                         <tr>
                                             <td><strong>Ngày Đăng Ký:</strong></td>
-                                            <td>{{ $order->user->created_at->format('d/m/Y') }}</td>
+                                            <td>{{ optional(optional($orderUser)->created_at)->format('d/m/Y') ?? '—' }}</td>
                                         </tr>
                                         <tr>
                                             <td><strong>Tổng Đơn Hàng:</strong></td>
                                             <td>
                                                 <span class="badge bg-info">
-                                                    {{ $order->user->orders->count() }} đơn hàng
+                                                    {{ optional($orderUser?->orders)->count() ?? 0 }} đơn hàng
                                                 </span>
                                             </td>
                                         </tr>
                                     </table>
                                     
-                                    <div class="mt-3">
-                                        <a href="{{ route('admin.users.show', $order->user->id) }}" class="btn btn-outline-primary btn-sm">
-                                            <i class="fas fa-user"></i> Xem Hồ Sơ Khách Hàng
-                                        </a>
-                                    </div>
+                                    @if($orderUser)
+                                        <div class="mt-3">
+                                            <a href="{{ route('admin.users.show', $orderUser->id) }}" class="btn btn-outline-primary btn-sm">
+                                                <i class="fas fa-user"></i> Xem Hồ Sơ Khách Hàng
+                                            </a>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>

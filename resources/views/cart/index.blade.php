@@ -50,7 +50,9 @@
                                             <td>
                                                 <h6 class="mb-1">{{ $details['name'] }}</h6>
                                                 <small class="text-muted">
+                                                    @if (!empty($details['category']))
                                                     <span class="badge bg-secondary">{{ $details['category'] }}</span>
+                                                @endif
                                                 </small>
                                             </td>
                                             <td>
@@ -66,7 +68,7 @@
                                                            onchange="this.form.submit()">
                                                 </form>
                                                 <small class="text-muted d-block mt-1">
-                                                    Tối đa: {{ $details['max_quantity'] ?? 'Không giới hạn' }}
+                                                    Tối đa: {{ $details['max_quantity'] ?? 'N/A' }}
                                                 </small>
                                             </td>
                                             <td>

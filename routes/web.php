@@ -97,18 +97,9 @@ Route::group(['prefix' => 'admin', 'middleware' => 'admin'], function () {
     Route::delete('products/{product}', [AdminController::class, 'productDestroy'])->name('admin.products.destroy');
 
     // Admin User Management Routes
-    Route::get('users', [App\Http\Controllers\Admin\UserController::class, 'index'])->name('admin.users.index');
-    Route::get('users/statistics', [App\Http\Controllers\Admin\UserController::class, 'statistics'])->name('admin.users.statistics');
-    Route::get('users/create', [App\Http\Controllers\Admin\UserController::class, 'create'])->name('admin.users.create');
-    Route::post('users', [App\Http\Controllers\Admin\UserController::class, 'store'])->name('admin.users.store');
-    Route::get('users/{user}', [App\Http\Controllers\Admin\UserController::class, 'show'])->name('admin.users.show');
-    Route::get('users/{user}/edit', [App\Http\Controllers\Admin\UserController::class, 'edit'])->name('admin.users.edit');
-    Route::patch('users/{user}', [App\Http\Controllers\Admin\UserController::class, 'update'])->name('admin.users.update');
-    Route::get('users/{user}/delete-confirmation', [App\Http\Controllers\Admin\UserController::class, 'deleteConfirmation'])->name('admin.users.delete-confirmation');
-    Route::delete('users/{user}', [App\Http\Controllers\Admin\UserController::class, 'destroy'])->name('admin.users.destroy');
-    Route::patch('users/{id}/restore', [App\Http\Controllers\Admin\UserController::class, 'restore'])->name('admin.users.restore');
-    Route::delete('users/{id}/force-delete', [App\Http\Controllers\Admin\UserController::class, 'forceDelete'])->name('admin.users.force-delete');
-    Route::patch('users/{user}/toggle-status', [App\Http\Controllers\Admin\UserController::class, 'toggleStatus'])->name('admin.users.toggle-status');
+    Route::get('users/statistics', [\App\Http\Controllers\Admin\UserController::class, 'statistics'])->name('admin.users.statistics');
+    Route::get('users/{user}/delete-confirmation', [\App\Http\Controllers\Admin\UserController::class, 'deleteConfirmation'])->name('admin.users.delete-confirmation');
+    Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->names('admin.users');
 
     // Admin Order Management Routes
     Route::get('orders', [App\Http\Controllers\AdminOrderController::class, 'index'])->name('admin.orders.index');
@@ -139,6 +130,10 @@ Route::group(['prefix' => 'admin', 'middleware' => 'admin'], function () {
     Route::get('dashboard/settings', [App\Http\Controllers\AdminDashboardController::class, 'settings'])->name('admin.dashboard.settings');
     Route::post('dashboard/settings', [App\Http\Controllers\AdminDashboardController::class, 'updateSettings'])->name('admin.dashboard.update-settings');
 
+    // Admin Voucher Management
+    Route::resource('vouchers', \App\Http\Controllers\Admin\VoucherAdminController::class)->names('admin.vouchers');
+
+
     // Admin System Management Routes
     Route::get('system/overview', [App\Http\Controllers\AdminSystemController::class, 'overview'])->name('admin.system.overview');
     Route::get('system/database', [App\Http\Controllers\AdminSystemController::class, 'database'])->name('admin.system.database');
@@ -167,24 +162,25 @@ Route::prefix('user')->name('user.')->group(function () {
 
 // Removed guest-accessible cart routes to ensure only authenticated users can purchase
 
-// Cart routes
-Route::middleware(['auth'])->group(function () {
+// Cart routes (require verified email for users, admins bypass)
+Route::middleware(['auth', 'verified_or_admin'])->group(function () {
     Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
     Route::post('/cart/add/{product}', [CartController::class, 'add'])->name('cart.add');
     Route::patch('/cart/update/{id}', [CartController::class, 'update'])->name('cart.update');
-    Route::delete('/cart/remove/{product}', [CartController::class, 'remove'])->name('cart.remove');
+    Route::delete('/cart/remove/{id}', [CartController::class, 'remove'])->name('cart.remove');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
 });
 
-// Test route for image upload (only for admin)
+// Admin chat console (admins do NOT need verified email)
 Route::middleware(['auth', 'admin'])->group(function () {
-    Route::get('/test-upload', function () {
-        return view('admin.test-upload');
-    })->name('test.upload');
+    Route::get('/admin/chats', [ChatController::class, 'adminIndex'])->name('admin.chats.index');
+    Route::get('/admin/chats/{chat}', [ChatController::class, 'adminShow'])->name('admin.chats.show');
+    Route::post('/admin/chats/{chat}/assign', [ChatController::class, 'assign'])->name('admin.chats.assign');
+    Route::post('/admin/chats/{chat}/close',  [ChatController::class, 'close'])->name('admin.chats.close');
 });
 
-// Thanh toán (OrderController xử lý cả COD & MoMo)
-Route::middleware(['auth'])->group(function () {
+// Thanh toán (OrderController xử lý cả COD & MoMo) - require verified email for users, admins bypass
+Route::middleware(['auth', 'verified_or_admin'])->group(function () {
     Route::get('/payment', [OrderController::class, 'index'])->name('user.payment.index');
     Route::post('/payment/process', [OrderController::class, 'processPayment'])->name('user.payment.process');
     // Thanh toán lại MoMo cho một đơn đã tạo
@@ -192,13 +188,18 @@ Route::middleware(['auth'])->group(function () {
     // Lịch sử đơn hàng và xem chi tiết
     Route::get('/orders', [OrderController::class, 'orderHistory'])->name('user.orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('user.orders.show');
+    Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('user.orders.cancel');
     
-    // Reviews
-    Route::post('/reviews/store', [OrderController::class, 'storeReview'])->name('reviews.store');
+    // Reviews (store from order context) - use distinct name to avoid conflicts
+    Route::post('/reviews/store', [OrderController::class, 'storeReview'])->name('order.reviews.store');
 });
 
-// Wishlist routes
-Route::middleware(['auth'])->group(function () {
+// MoMo callback & IPN (không yêu cầu auth)
+Route::get('/payment/momo/callback', [OrderController::class, 'callback'])->name('user.payment.momo.callback');
+Route::post('/payment/momo/ipn', [OrderController::class, 'ipn'])->name('user.payment.momo.ipn');
+
+// Wishlist routes (require verified email for users, admins bypass)
+Route::middleware(['auth', 'verified_or_admin'])->group(function () {
     Route::get('/wishlist', [App\Http\Controllers\WishlistController::class, 'index'])->name('wishlist.index');
     Route::post('/wishlist/add/{product}', [App\Http\Controllers\WishlistController::class, 'add'])->name('wishlist.add');
     Route::delete('/wishlist/remove/{product}', [App\Http\Controllers\WishlistController::class, 'remove'])->name('wishlist.remove');
@@ -207,13 +208,36 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/wishlist/move-to-cart/{product}', [App\Http\Controllers\WishlistController::class, 'moveToCart'])->name('wishlist.move-to-cart');
 });
 
-// Product Reviews routes
-Route::middleware(['auth'])->group(function () {
-    Route::post('/products/{product}/reviews', [App\Http\Controllers\ProductReviewController::class, 'store'])->name('reviews.store');
-    Route::put('/reviews/{review}', [App\Http\Controllers\ProductReviewController::class, 'update'])->name('reviews.update');
-    Route::delete('/reviews/{review}', [App\Http\Controllers\ProductReviewController::class, 'destroy'])->name('reviews.destroy');
-    Route::get('/my-reviews', [App\Http\Controllers\ProductReviewController::class, 'myReviews'])->name('reviews.my-reviews');
-    Route::get('/products/{product}/reviews', [App\Http\Controllers\ProductReviewController::class, 'productReviews'])->name('reviews.product-reviews');
+// Voucher routes (require verified email for users, admins bypass)
+Route::middleware(['auth', 'verified_or_admin'])->group(function () {
+    Route::get('/checkout/vouchers/{order}', [VoucherController::class,'showChoices'])->name('vouchers.choices');
+    Route::post('/checkout/vouchers/{order}/apply', [VoucherController::class,'applyChoice'])->name('vouchers.apply');
+    Route::post('/checkout/vouchers/{order}/random', [VoucherController::class,'randomGift'])->name('vouchers.random');
+    Route::get('/api/vouchers/{order}', [VoucherController::class,'getAvailableVouchers'])->name('vouchers.api');
+    Route::get('/api/vouchers/preview', [VoucherController::class,'preview'])->name('vouchers.preview');
+});
+
+// Product Reviews routes (require verified email for users, admins bypass) - namespaced as 'product-reviews.*'
+Route::middleware(['auth', 'verified_or_admin'])->group(function () {
+    Route::post('/products/{product}/reviews', [App\Http\Controllers\ProductReviewController::class, 'store'])->name('product-reviews.store');
+    Route::put('/reviews/{review}', [App\Http\Controllers\ProductReviewController::class, 'update'])->name('product-reviews.update');
+    Route::delete('/reviews/{review}', [App\Http\Controllers\ProductReviewController::class, 'destroy'])->name('product-reviews.destroy');
+    Route::get('/my-reviews', [App\Http\Controllers\ProductReviewController::class, 'myReviews'])->name('product-reviews.my');
+    Route::get('/products/{product}/reviews', [App\Http\Controllers\ProductReviewController::class, 'productReviews'])->name('product-reviews.index');
+});
+
+// Review routes (require verified email for users, admins bypass)
+Route::middleware(['auth', 'verified_or_admin'])->group(function () {
+    Route::post('/reviews', [App\Http\Controllers\ReviewController::class, 'store'])->name('reviews.store');
+    Route::get('/reviews/{review}/edit', [App\Http\Controllers\ReviewController::class, 'edit'])->name('reviews.edit');
+    Route::put('/reviews/{review}', [App\Http\Controllers\ReviewController::class, 'update'])->name('reviews.update');
+});
+
+// User Account Management (require verified for users, admins bypass)
+Route::middleware(['auth', 'verified_or_admin'])->prefix('account')->name('user.account.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\User\AccountController::class, 'dashboard'])->name('dashboard');
+    Route::post('/profile', [\App\Http\Controllers\User\AccountController::class, 'updateProfile'])->name('profile.update');
+    Route::post('/password', [\App\Http\Controllers\User\AccountController::class, 'changePassword'])->name('password.change');
 });
 
 // Search routes
@@ -222,8 +246,8 @@ Route::get('/search/advanced', [App\Http\Controllers\SearchController::class, 'a
 Route::get('/search/suggestions', [App\Http\Controllers\SearchController::class, 'suggestions'])->name('search.suggestions');
 Route::get('/search/compare', [App\Http\Controllers\SearchController::class, 'compare'])->name('search.compare');
 
-// User Address Management Routes
-Route::middleware(['auth'])->group(function () {
+// User Address Management Routes (require verified email for users, admins bypass)
+Route::middleware(['auth', 'verified_or_admin'])->group(function () {
     Route::get('/addresses', [App\Http\Controllers\UserAddressController::class, 'index'])->name('user.addresses.index');
     Route::get('/addresses/create', [App\Http\Controllers\UserAddressController::class, 'create'])->name('user.addresses.create');
     Route::post('/addresses', [App\Http\Controllers\UserAddressController::class, 'store'])->name('user.addresses.store');
@@ -233,96 +257,4 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/addresses/{address}', [App\Http\Controllers\UserAddressController::class, 'destroy'])->name('user.addresses.destroy');
     Route::patch('/addresses/{address}/set-default', [App\Http\Controllers\UserAddressController::class, 'setDefault'])->name('user.addresses.set-default');
     Route::get('/api/addresses', [App\Http\Controllers\UserAddressController::class, 'getAddresses'])->name('user.addresses.api');
-});
-// Callback và IPN không cần auth (MoMo gọi trực tiếp)
-Route::get('/payment/momo/callback', [OrderController::class, 'callback'])->name('user.payment.momo.callback');
-Route::post('/payment/momo/ipn', [OrderController::class, 'ipn'])->name('user.payment.momo.ipn');
-
-Route::middleware('auth')->group(function () {
-    Route::post('/products/{product}/reviews', [ReviewController::class, 'store'])
-        ->name('reviews.store'); // expects product_id + order_id + rating + content + images[]
-
-    Route::get('/reviews/{review}/edit', [ReviewController::class, 'edit'])
-        ->name('reviews.edit'); // form sửa nội dung
-
-    Route::put('/reviews/{review}', [ReviewController::class, 'update'])
-        ->name('reviews.update'); // chỉ sửa 'content'
-});
-
-// ===== Admin side: Review Responses =====
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::post('/reviews/{review}/response', [ReviewResponseController::class, 'store'])
-        ->name('reviews.response.store');
-    Route::put('/reviews/{review}/response', [ReviewResponseController::class, 'update'])
-        ->name('reviews.response.update');
-    Route::delete('/reviews/{review}/response', [ReviewResponseController::class, 'destroy'])
-        ->name('reviews.response.destroy');
-});
-Route::middleware('auth')->group(function () {
-    // Hộp chat phía user (mở/tạo chat cá nhân)
-    Route::get('/chat', [ChatController::class, 'open'])->name('chat.open');
-
-    // API messages
-    Route::get('/chat/{chat}/messages', [MessageController::class, 'index'])->name('chat.messages.index');
-    Route::post('/chat/{chat}/messages', [MessageController::class, 'store'])->name('chat.messages.store');
-    Route::post('/chat/{chat}/typing', [MessageController::class, 'typing'])->name('chat.typing');
-
-    // Admin chat console
-    Route::middleware('admin')->group(function () {
-        Route::get('/admin/chats', [ChatController::class, 'adminIndex'])->name('admin.chats.index');
-        Route::get('/admin/chats/{chat}', [ChatController::class, 'adminShow'])->name('admin.chats.show');
-        Route::post('/admin/chats/{chat}/assign', [ChatController::class, 'assign'])->name('admin.chats.assign');
-        Route::post('/admin/chats/{chat}/close',  [ChatController::class, 'close'])->name('admin.chats.close');
-    });
-        // Voucher routes (inside auth group already)
-        Route::get('/checkout/vouchers/{order}', [VoucherController::class,'showChoices'])->name('vouchers.choices');
-        Route::post('/checkout/vouchers/{order}/apply', [VoucherController::class,'applyChoice'])->name('vouchers.apply');
-        Route::post('/checkout/vouchers/{order}/random', [VoucherController::class,'randomGift'])->name('vouchers.random');
-        Route::get('/api/vouchers/{order}', [VoucherController::class,'getAvailableVouchers'])->name('vouchers.api');
-        Route::get('/api/vouchers/preview', [VoucherController::class,'preview'])->name('vouchers.preview');
-        // User dashboard route
-        Route::get('/dashboard', function() {
-            return view('user.dashboard');
-        })->name('user.dashboard');
-        
-        // Order voucher routes
-        Route::get('/orders/{order}/vouchers', [App\Http\Controllers\User\OrderController::class, 'showVouchers'])->name('user.orders.vouchers');
-        Route::post('/orders/{order}/complete', [App\Http\Controllers\User\OrderController::class, 'markAsCompleted'])->name('user.orders.complete');
-        
-        // Test voucher system
-        Route::get('/test/voucher-system', function() {
-            return view('test.voucher-system');
-        })->name('test.voucher.system');
-        
-        // Test chat system
-        Route::get('/test/chat-system', function() {
-            return view('test.chat-test');
-        })->name('test.chat.system');
-        
-        // Debug chat API
-        Route::get('/debug/chat-api', function() {
-            $user = auth()->user();
-            $chat = \App\Models\Chat::where('user_id', $user->id)->where('status', 'open')->first();
-            
-            if (!$chat) {
-                return response()->json(['error' => 'No active chat found']);
-            }
-            
-            $messages = $chat->messages()->with(['sender', 'attachments'])->orderBy('created_at')->get();
-            
-            return response()->json([
-                'chat_id' => $chat->id,
-                'user_id' => $user->id,
-                'messages_count' => $messages->count(),
-                'messages' => $messages->map(function($message) {
-                    return [
-                        'id' => $message->id,
-                        'body' => $message->body,
-                        'sender_is_admin' => $message->sender_is_admin,
-                        'created_at' => $message->created_at,
-                        'created_at_iso' => $message->created_at->toISOString(),
-                    ];
-                })
-            ]);
-        });
 });

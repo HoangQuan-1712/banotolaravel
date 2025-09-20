@@ -204,32 +204,54 @@ class VoucherSeeder extends Seeder
                 'type' => 'vip_tier',
                 'name' => 'Personal Car Shopping Service',
                 'description' => 'Dedicated personal shopper to help you find and customize your perfect car.',
-                'value' => null,
-                'tier_level' => 'platinum',
-                'metadata' => ['service_type' => 'personal_shopper', 'duration' => 'lifetime']
+                'value' => null
             ]
         ];
 
-        // Create all vouchers
-        $allVouchers = array_merge($tieredChoiceVouchers, $randomGiftVouchers, $vipTierVouchers);
+// Create all vouchers
+$allVouchers = array_merge($tieredChoiceVouchers, $randomGiftVouchers);
 
-        $created = 0;
-        $updated = 0;
+$created = 0;
+$updated = 0;
 
-        foreach ($allVouchers as $voucherData) {
-            $existing = Voucher::where('code', $voucherData['code'])->first();
-            
-            if ($existing) {
-                // Update existing voucher
-                $existing->update($voucherData);
-                $updated++;
-            } else {
-                // Create new voucher
-                Voucher::create($voucherData);
-                $created++;
-            }
-        }
-
-        $this->command->info("Created {$created} new vouchers and updated {$updated} existing vouchers successfully!");
+foreach ($allVouchers as $voucherData) {
+    $existing = Voucher::where('code', $voucherData['code'])->first();
+    
+    if ($existing) {
+        // Update existing voucher
+        $existing->update($voucherData);
+        $updated++;
+    } else {
+        // Create new voucher
+        Voucher::create($voucherData);
+        $created++;
     }
 }
+
+$this->command->info("Created {$created} new vouchers and updated {$updated} existing vouchers successfully!");
+
+// VIP Tier Vouchers
+$vipVouchers = [
+    ['level' => 'bronze', 'name' => 'Giảm giá 5% cho phụ kiện', 'description' => 'Voucher giảm giá 5% cho lần mua phụ kiện tiếp theo.'],
+    ['level' => 'silver', 'name' => 'Bảo dưỡng miễn phí 1 lần', 'description' => 'Tặng 1 lần bảo dưỡng miễn phí cho xe của bạn.'],
+    ['level' => 'gold', 'name' => 'Voucher bảo hiểm vật chất $200', 'description' => 'Tặng voucher bảo hiểm vật chất trị giá $200.'],
+    ['level' => 'platinum', 'name' => 'Quà tặng đặc biệt', 'description' => 'Một quà tặng đặc biệt dành riêng cho thành viên Kim Cương.'],
+];
+
+foreach ($vipVouchers as $v) {
+    Voucher::updateOrCreate(
+        ['code' => 'VIP_' . strtoupper($v['level'])],
+        [
+            'name' => $v['name'],
+            'type' => 'vip_tier',
+            'description' => $v['description'],
+            'tier_level' => $v['level'],
+            'active' => true,
+            'usage_limit_per_user' => 1, // Mỗi người chỉ nhận 1 lần khi đạt hạng
+        ]
+    );
+}
+
+$this->command->info('VIP tier vouchers seeded.');
+
+    }

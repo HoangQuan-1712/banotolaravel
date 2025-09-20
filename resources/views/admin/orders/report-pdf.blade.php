@@ -151,10 +151,10 @@
                 <tr>
                     <td class="text-center"><strong>#{{ $order->id }}</strong></td>
                     <td>
-                        <strong>{{ $order->user->name }}</strong><br>
-                        <small style="color: #6c757d;">{{ $order->user->email }}</small>
-                        @if($order->user->phone)
-                            <br><small style="color: #6c757d;">{{ $order->user->phone }}</small>
+                        <strong>{{ optional($order->user)->name ?? 'Khách hàng (N/A)' }}</strong><br>
+                        <small style="color: #6c757d;">{{ optional($order->user)->email ?? 'N/A' }}</small>
+                        @if(optional($order->user)->phone)
+                            <br><small style="color: #6c757d;">{{ optional($order->user)->phone }}</small>
                         @endif
                     </td>
                     <td>

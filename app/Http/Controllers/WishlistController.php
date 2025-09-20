@@ -106,7 +106,9 @@ class WishlistController extends Controller
                 'name' => $product->name,
                 'price' => $product->price,
                 'quantity' => 1,
-                'image' => $product->image
+                'image' => $product->image,
+                'category' => optional($product->category)->name ?? 'Sản phẩm',
+                'max_quantity' => $product->quantity
             ];
         }
         

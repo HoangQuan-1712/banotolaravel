@@ -63,15 +63,23 @@ class Product extends Model
     public function getImageUrlAttribute()
     {
         if ($this->image) {
-            // Check if the image file exists in storage
-            if (Storage::disk('public')->exists($this->image)) {
-                return asset('storage/' . $this->image);
-            } else {
-                // If file doesn't exist, return default image (no logging to avoid spam)
-                return $this->getDefaultImageUrl();
+            // Normalize value in DB: accept both 'products/...' and 'storage/products/...'
+            $normalized = ltrim(preg_replace('/^storage\//', '', $this->image), '/');
+
+            // If stored as absolute URL, return directly
+            if (filter_var($this->image, FILTER_VALIDATE_URL)) {
+                return $this->image;
             }
+
+            // File exists in public disk?
+            if (Storage::disk('public')->exists($normalized)) {
+                return asset('storage/' . $normalized);
+            }
+
+            // Fall back to default image
+            return $this->getDefaultImageUrl();
         }
-        
+
         return $this->getDefaultImageUrl();
     }
 
@@ -84,14 +92,18 @@ class Product extends Model
     public function getImagePathAttribute()
     {
         if ($this->image) {
-            return storage_path('app/public/' . $this->image);
+            $normalized = ltrim(preg_replace('/^storage\//', '', $this->image), '/');
+            return storage_path('app/public/' . $normalized);
         }
         return null;
     }
 
     public function hasImage()
     {
-        return $this->image && Storage::disk('public')->exists($this->image);
+        if (!$this->image) return false;
+        if (filter_var($this->image, FILTER_VALIDATE_URL)) return true;
+        $normalized = ltrim(preg_replace('/^storage\//', '', $this->image), '/');
+        return Storage::disk('public')->exists($normalized);
     }
 
     // Available stock = total quantity minus reserved

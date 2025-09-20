@@ -43,6 +43,15 @@ class OrderController extends Controller
     // nhận thao tác thanh toán từ form rồi điều hướng kết quả momo hay COD
     public function processPayment(Request $request)
     {
+        // Nếu có order_id, nghĩa là đang thanh toán lại cho đơn hàng cũ
+        if ($request->has('order_id')) {
+            $existingOrder = Order::findOrFail($request->order_id);
+            if ($existingOrder->user_id !== Auth::id()) {
+                abort(403, 'Unauthorized');
+            }
+            // Cập nhật thông tin và tiếp tục thanh toán cho đơn hàng cũ
+            return $this->proceedToPayment($request, $existingOrder);
+        }
         $request->validate([
             'name' => 'required|string|max:100',
             'address' => 'required|string|max:255',
@@ -77,7 +86,7 @@ class OrderController extends Controller
             }
         }
 
-        // Tạo đơn
+        // Tạo đơn hàng mới nếu không có order_id
         $order = Order::create([
             'user_id' => Auth::id(),
             'name' => $name,
@@ -103,44 +112,41 @@ class OrderController extends Controller
             }
         }
 
-        // Nếu người dùng bấm nút "Chọn voucher/Quà tặng" thì luôn điều hướng sang trang chọn ưu đãi
+        // Nếu người dùng bấm nút "Chọn voucher/Quà tặng", luôn điều hướng sang trang chọn ưu đãi
         if ($request->boolean('preview_voucher')) {
-            // Xoá giỏ và chuyển đến trang chọn voucher (nếu không có sẽ hiển thị thông báo không có ưu đãi)
             session()->forget('cart');
-            return redirect()->route('vouchers.choices', $order)
-                ->with('info', 'Hãy xem ưu đãi khả dụng cho đơn hàng của bạn');
+            return redirect()->route('vouchers.choices', $order);
         }
 
-        // Trước khi điều hướng thanh toán: nếu có ưu đãi khả dụng thì điều hướng sang trang chọn voucher/quà tặng
-        try {
-            $voucherService = new VoucherService();
-            $available = $voucherService->getAvailableVouchers($order, auth()->user());
-            $hasVouchers = ($available['tiered_choices']->isNotEmpty())
-                || ($available['random_gift'] !== null)
-                || ($available['vip_tier']->isNotEmpty());
-
-            if ($hasVouchers) {
-                // Xoá giỏ trước khi rẽ sang trang voucher
-                session()->forget('cart');
-                return redirect()->route('vouchers.choices', $order)
-                    ->with('success', 'Chọn voucher/quà tặng dành riêng cho bạn trước khi thanh toán.');
-            }
-        } catch (\Throwable $e) {
-            \Log::error('Check vouchers failed for order ' . $order->id . ': ' . $e->getMessage());
-        }
+        // Nếu không xem voucher, thì đi thẳng đến thanh toán
+        session()->forget('cart');
 
         // ✅ XÓA GIỎ HÀNG NGAY KHI NHẤN THANH TOÁN (kể cả MoMo chưa thành công)
         session()->forget('cart');
 
+        return $this->proceedToPayment($request, $order);
+    }
+
+    protected function proceedToPayment(Request $request, Order $order)
+    {
+        $deposit = $order->total_price * 0.3;
+
         // Rẽ nhánh phương thức
         if ($request->payment_method === 'momo') {
-            return $this->redirectToMoMo($order, $deposit);
+            return $this->redirectToMoMo($order);
         }
 
         // COD - reserve stock immediately on COD deposit
         $order->update([
             'status' => 'đã đặt cọc (COD)',
         ]);
+
+        // Trigger tier update for COD orders as well
+        $tierUpgradeResult = app(TierService::class)->checkTierUpgrade($order->user, $order);
+        if ($tierUpgradeResult['upgraded']) {
+            // Use a different session key to avoid being overwritten
+            session()->flash('tier_upgrade_message', $tierUpgradeResult['message']);
+        }
 
         // Reserve inventory for COD deposit
         try {
@@ -149,86 +155,100 @@ class OrderController extends Controller
             \Log::error('Reserve stock failed for COD order ' . $order->id . ': ' . $e->getMessage());
         }
 
-        return redirect()->route('user.orders.index')
-            ->with('success', 'Đặt cọc thành công! Số tiền cọc: ' . number_format($deposit, 0, ',', '.') . ' $. Số tiền còn lại sẽ thanh toán khi nhận xe.');
+        $successMessage = 'Đặt cọc thành công! Số tiền cọc: ' . number_format($deposit, 0, ',', '.') . ' $. Số tiền còn lại sẽ thanh toán khi nhận xe.';
+        if (session('tier_upgrade_message')) {
+            $successMessage .= "\n" . session('tier_upgrade_message');
+        }
+        return redirect()->route('user.orders.index')->with('success', $successMessage);
     }
 
     /**
      * Tạo giao dịch MoMo và chuyển hướng người dùng
      */
-    protected function redirectToMoMo(Order $order, $deposit = null)
+    protected function redirectToMoMo(Order $order)
     {
         $redirectUrl = route('user.payment.momo.callback');
         $ipnUrl = route('user.payment.momo.ipn');
         $orderId = time() . '_' . $order->id;
         $requestId = uniqid();
 
-        $orderInfo = "Đặt cọc đơn hàng #{$order->id}";
-        $amount = (string) max(1000, (int) ($deposit ?? $order->total_price)); // Sử dụng tiền cọc nếu có
-        $extraData = ''; // có thể base64_encode(json_encode(...))
+        $orderInfo = "Thanh toán đơn hàng #{$order->id}";
+
+        // 1) Số tiền thanh toán = Tổng tiền đơn hàng (đơn vị VND)
+        // MoMo yêu cầu số nguyên VND, tối thiểu 1,000 VND với payWithATM
+        $orderTotalVND = (int) ceil($order->total_price);
+        $amount = (string) max(1000, $orderTotalVND);
+
+        // 2) Dùng payWithATM để hiển thị trang NAPAS như ảnh demo
         $requestType = 'payWithATM';
+
+        // 3) KÝ ĐÚNG THỨ TỰ THAM SỐ
+        $extraData = base64_encode(json_encode(['order_id' => $order->id, 'user_id' => $order->user_id]));
         $rawHash = "accessKey={$this->accessKey}&amount={$amount}&extraData={$extraData}&ipnUrl={$ipnUrl}"
             . "&orderId={$orderId}&orderInfo={$orderInfo}&partnerCode={$this->partnerCode}"
             . "&redirectUrl={$redirectUrl}&requestId={$requestId}&requestType={$requestType}";
         $signature = hash_hmac('sha256', $rawHash, $this->secretKey);
 
-        $payload = [
-            'partnerCode' => $this->partnerCode,
-            'partnerName' => "YourStore",
-            'storeId' => "Store_01",
-            'requestId' => $requestId,
-            'amount' => $amount,
-            'orderId' => $orderId,
-            'orderInfo' => $orderInfo,
-            'redirectUrl' => $redirectUrl,
-            'ipnUrl' => $ipnUrl,
-            'lang' => 'vi',
-            'extraData' => $extraData,
-            'requestType' => $requestType,
-            'signature' => $signature,
-        ];
+$payload = [
+'partnerCode' => $this->partnerCode,
+'partnerName' => "YourStore",
+'storeId' => "Store_01",
+'requestId' => $requestId,
+'amount' => $amount,
+'orderId' => $orderId,
+'orderInfo' => $orderInfo,
+'redirectUrl' => $redirectUrl,
+'ipnUrl' => $ipnUrl,
+'lang' => 'vi',
+'extraData' => $extraData,
+'requestType' => $requestType,
+'signature' => $signature,
+];
 
-        Log::info('MoMo request payload: ', $payload);
+Log::info('MoMo request payload: ', $payload);
 
-        try {
-            $response = Http::withHeaders(['Content-Type' => 'application/json; charset=UTF-8'])
-                ->withoutVerifying()
-                ->post($this->endpoint, $payload);
+try {
+// 4) GỬI DẠNG JSON
+$response = Http::withHeaders(['Content-Type' => 'application/json; charset=UTF-8'])
+->asJson()
+->withoutVerifying()
+->post($this->endpoint, $payload);
 
-            if (!$response->successful()) {
-                Log::error('MoMo create payment failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
-                return redirect()
-                    ->route('user.orders.index')
-                    ->with('error', 'Không thể kết nối MoMo (' . $response->status() . '). Vui lòng thử lại.');
-            }
+if (!$response->successful()) {
+Log::error('MoMo create payment failed', [
+'status' => $response->status(),
+'body' => $response->body(),
+]);
+return redirect()
+->route('user.payment.index')
+->with('error', 'Không thể kết nối MoMo (' . $response->status() . '). Vui lòng thử lại.');
+}
 
-            $json = $response->json();
-            Log::info('MoMo response:', $json);
+$json = $response->json();
+Log::info('MoMo response:', $json);
 
-            if (!empty($json['payUrl'])) {
-                $order->update([
-                    'momo_request_id' => $requestId,
-                    'momo_order_id' => $orderId,
-                ]);
-                return redirect()->away($json['payUrl']);
-            }
+if (!empty($json['payUrl'])) {
+$order->update([
+'momo_request_id' => $requestId,
+'momo_order_id' => $orderId,
+]);
+return redirect()->away($json['payUrl']);
+}
 
-            // Không có payUrl → báo lỗi rõ
-            $msg = $json['message'] ?? 'MoMo không trả về payUrl.';
-            Log::error('MoMo payUrl missing', ['response' => $json]);
-            return redirect()
-                ->route('user.orders.index')
-                ->with('error', 'Không tạo được link thanh toán MoMo: ' . $msg);
-        } catch (\Exception $e) {
-            Log::error('MoMo request exception', ['error' => $e->getMessage()]);
-            return redirect()
-                ->route('user.orders.index')
-                ->with('error', 'Lỗi khi tạo thanh toán MoMo: ' . $e->getMessage());
-        }
-    }
+$msg = $json['message'] ?? ($json['errorMessage'] ?? 'MoMo không trả về payUrl.');
+Log::error('MoMo payUrl missing', ['response' => $json]);
+
+return redirect()
+->route('user.payment.index')
+->with('error', 'Không tạo được link thanh toán MoMo: ' . $msg);
+
+} catch (\Exception $e) {
+Log::error('MoMo request exception', ['error' => $e->getMessage()]);
+return redirect()
+->route('user.payment.index')
+->with('error', 'Lỗi khi tạo thanh toán MoMo: ' . $e->getMessage());
+}
+}
 
     /**
      * Callback: người dùng được MoMo chuyển về sau thanh toán
@@ -236,8 +256,9 @@ class OrderController extends Controller
     public function callback(Request $request)
     {
         $resultCode = $request->input('resultCode'); // 0 = success
+        $message = $request->input('message') ?? $request->input('localMessage');
 
-        // Có orderId thì lấy id thực từ "time_orderId"
+        // Lấy order từ orderId (định dạng time_id)
         $order = null;
         if ($request->filled('orderId')) {
             $parts = explode('_', $request->orderId);
@@ -245,39 +266,31 @@ class OrderController extends Controller
             $order = Order::find($orderId);
         }
 
-        if ($resultCode === '0' || $resultCode === 0) {
-            // ✅ Thành công: xoá giỏ + cập nhật trạng thái đơn
+        if ((string) $resultCode === '0') {
+            // ✅ Thành công
             session()->forget('cart');
             if ($order) {
                 $order->update(['status' => 'đã đặt cọc (MoMo)']);
-                // Reserve inventory for successful MoMo deposit
-                try {
-                    $order->reserveStock();
-                } catch (\Throwable $e) {
-                    \Log::error('Reserve stock failed for MoMo order ' . $order->id . ': ' . $e->getMessage());
+                try { $order->reserveStock(); } catch (\Throwable $e) { \Log::error('Reserve stock failed for MoMo order ' . ($order->id ?? 'N/A') . ': ' . $e->getMessage()); }
+                $tierUpgradeResult = app(TierService::class)->checkTierUpgrade($order->user, $order);
+                if ($tierUpgradeResult['upgraded']) {
+                    session()->flash('tier_upgrade_message', $tierUpgradeResult['message']);
                 }
-                
-                // Process vouchers and tier upgrade after successful payment
-                $this->processOrderCompletion($order);
             }
-            return redirect()->route('user.orders.index')
-                ->with('success', 'Đặt cọc MoMo thành công! Số tiền cọc: ' . number_format($order->total_price * 0.3, 0, ',', '.') . ' $');
+            $deposit = $order ? ($order->total_price * 0.3) : 0;
+            $successMessage = 'Đặt cọc MoMo thành công! Số tiền cọc: ' . number_format($deposit, 0, ',', '.') . ' $';
+            if (session('tier_upgrade_message')) { $successMessage .= "\n" . session('tier_upgrade_message'); }
+            return redirect()->route('user.orders.index')->with('success', $successMessage);
         }
 
-        // ❌ Thất bại/hủy: giữ nguyên giỏ hàng để user thử lại
+        // ❌ Thất bại/hủy
         if ($order) {
             $order->update(['status' => 'thanh toán MoMo không thành công']);
-            // Release reserved stock on failed payment
-            try {
-                $order->releaseReservedStock();
-            } catch (\Throwable $e) {
-                \Log::error('Release stock failed on MoMo fail for order ' . $order->id . ': ' . $e->getMessage());
-            }
+            try { $order->releaseReservedStock(); } catch (\Throwable $e) { \Log::error('Release stock failed on MoMo fail for order ' . $order->id . ': ' . $e->getMessage()); }
         }
 
-        // Quay lại trang checkout để người dùng thử thanh toán lại
-        return redirect()->route('user.payment.index')
-            ->with('error', 'Thanh toán MoMo thất bại hoặc bị hủy. Vui lòng thử lại.');
+        $errorText = 'Thanh toán MoMo thất bại hoặc bị hủy.' . ($message ? ' (' . $message . ')' : '');
+        return redirect()->route('user.payment.index')->with('error', $errorText);
     }
 
     /**
@@ -311,15 +324,73 @@ class OrderController extends Controller
             abort(403, 'Bạn không có quyền thanh toán lại đơn này.');
         }
 
-        if ($order->status === 'đã thanh toán (MoMo)') {
-            return redirect()->route('user.orders.index')->with('info', 'Đơn này đã thanh toán.');
+        $payableStatuses = [
+            'chờ đặt cọc',
+            'thanh toán MoMo không thành công',
+            'chờ thanh toán',
+            Order::STATUS_AWAITING_DEPOSIT ?? 'chờ đặt cọc',
+        ];
+
+        if (!in_array($order->status, $payableStatuses, true)) {
+            return redirect()->route('user.orders.index')->with('info', 'Đơn hàng này không cần thanh toán lại.');
         }
 
-        // Đưa về "chờ thanh toán" trước khi tạo giao dịch mới (tuỳ bạn)
-        $order->update(['status' => 'chờ thanh toán']);
+        // Tái tạo giỏ hàng từ order items để truyền vào trang thanh toán
+        $cart = [];
+        foreach ($order->items as $item) {
+            if ($item->product) { // Ensure product exists
+                $cart[$item->product_id] = [
+                    'id' => $item->product_id,
+                    'name' => $item->product->name,
+                    'price' => $item->price,
+                    'quantity' => $item->quantity,
+                    'image' => $item->product->image,
+                    'category' => optional($item->product->category)->name ?? 'Sản phẩm',
+                    'max_quantity' => $item->product->quantity
+                ];
+            }
+        }
+        session(['cart' => $cart]);
 
-        // PHẢI return
-        return $this->redirectToMoMo($order);
+        // Chuyển hướng đến trang đặt cọc/thanh toán, mang theo ID của đơn hàng cũ
+        return redirect()->route('user.payment.index', ['order_id' => $order->id]);
+    }
+
+    /**
+     * Cancel an order that is still waiting for deposit/payment.
+     */
+    public function cancel(Order $order)
+    {
+        if ($order->user_id !== Auth::id()) {
+            abort(403, 'Bạn không có quyền hủy đơn này.');
+        }
+
+        // Allow cancel only for waiting/failed statuses
+        $cancelableStatuses = [
+            'chờ đặt cọc',
+            'chờ thanh toán',
+            'thanh toán MoMo không thành công',
+            Order::STATUS_AWAITING_DEPOSIT ?? 'chờ đặt cọc',
+        ];
+
+        if (!in_array($order->status, $cancelableStatuses, true)) {
+            return redirect()->route('user.orders.index')
+                ->with('error', 'Đơn hàng hiện tại không thể hủy.');
+        }
+
+        // Release reserved stock if any
+        try {
+            if (method_exists($order, 'releaseReservedStock')) {
+                $order->releaseReservedStock();
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Release stock failed on cancel for order ' . $order->id . ': ' . $e->getMessage());
+        }
+
+        $order->update(['status' => 'đã hủy']);
+
+        return redirect()->route('user.orders.index')
+            ->with('success', 'Đơn hàng #' . $order->id . ' đã được hủy.');
     }
 
     // gọi lịch sử các đơn hàng theo người dùng

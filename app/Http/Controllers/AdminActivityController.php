@@ -166,7 +166,7 @@ class AdminActivityController extends Controller
                 return [
                     'type' => 'order',
                     'action' => 'Đặt hàng mới',
-                    'user' => $order->user->name,
+                    'user' => optional($order->user)->name ?? 'Khách hàng (N/A)',
                     'details' => 'Đơn hàng #' . $order->id,
                     'time' => $order->created_at,
                     'status' => $order->status

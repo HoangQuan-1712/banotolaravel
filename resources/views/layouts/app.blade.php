@@ -764,12 +764,21 @@
                         @endif
                         <!-- Logout cho cả Customer và Admin -->
                         <li class="nav-item">
-                            <form action="{{ route('logout') }}" method="POST" style="display:inline;">
-                                @csrf
-                                <button type="submit" class="nav-link btn btn-link logout-btn">
-                                    <i class="fas fa-sign-out-alt"></i> <span class="d-none d-lg-inline">Đăng Xuất</span>
-                                </button>
-                            </form>
+                            <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user-cog"></i> <span class="d-none d-xl-inline">Tài khoản</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                                <li><a class="dropdown-item" href="{{ route('user.account.dashboard') }}">Thông tin chung</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form action="{{ route('logout') }}" method="POST">
+                                        @csrf
+                                        <button type="submit" class="dropdown-item">Đăng Xuất</button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </li>
                         </li>
                     @endauth
                 </ul>

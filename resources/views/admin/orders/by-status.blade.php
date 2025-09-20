@@ -176,8 +176,8 @@
                                                     <i class="fas fa-user-circle fa-2x text-primary"></i>
                                                 </div>
                                                 <div>
-                                                    <div class="fw-bold">{{ $order->user->name }}</div>
-                                                    <small class="text-muted">{{ $order->user->email }}</small>
+                                                    <div class="fw-bold">{{ optional($order->user)->name ?? 'Khách hàng (N/A)' }}</div>
+                                                    <small class="text-muted">{{ optional($order->user)->email ?? 'N/A' }}</small>
                                                 </div>
                                             </div>
                                         </td>

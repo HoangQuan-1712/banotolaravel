@@ -295,6 +295,9 @@
                             <li><a class="dropdown-item" href="{{ route('admin.orders.index') }}">
                                 <i class="fas fa-shopping-bag"></i> Đơn Hàng
                             </a></li>
+                            <li><a class="dropdown-item" href="{{ route('admin.vouchers.index') }}">
+                                <i class="fas fa-ticket-alt"></i> Vouchers
+                            </a></li>
                             <li><a class="dropdown-item" href="{{ route('admin.reviews.index') }}">
                                 <i class="fas fa-star"></i> Đánh Giá
                             </a></li>
@@ -323,18 +326,22 @@
                             <i class="fas fa-globe"></i> Xem Trang Chủ
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <span class="nav-link">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-user"></i> {{ auth()->user()->name }}
-                        </span>
-                    </li>
-                    <li class="nav-item">
-                        <form action="{{ route('logout') }}" method="POST" style="display:inline;">
-                            @csrf
-                            <button type="submit" class="nav-link btn btn-link logout-btn">
-                                <i class="fas fa-sign-out-alt"></i> Đăng Xuất
-                            </button>
-                        </form>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end admin-dropdown-menu">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-user-circle"></i> Profile</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form action="{{ route('logout') }}" method="POST">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="fas fa-sign-out-alt"></i> Đăng Xuất
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
                     </li>
                 </ul>
             </div>

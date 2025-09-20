@@ -24,8 +24,9 @@ class CustomerTier extends Model {
 
     // Helper methods
     public static function getTierBySpending($amount) {
-        return self::where('min_spent', '<=', $amount)
-                  ->orderByDesc('min_spent')
+        return self::where('min_spent', '>', 0)
+                  ->where('min_spent', '<=', $amount)
+                  ->orderBy('min_spent', 'desc')
                   ->first();
     }
 

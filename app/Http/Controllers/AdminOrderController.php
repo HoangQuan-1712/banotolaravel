@@ -361,9 +361,9 @@ class AdminOrderController extends Controller
 
                 fputcsv($file, [
                     '#' . $order->id,
-                    $order->user->name,
-                    $order->user->email,
-                    $order->user->phone ?? 'N/A',
+                    optional($order->user)->name ?? 'Khách hàng (N/A)',
+                    optional($order->user)->email ?? 'N/A',
+                    optional($order->user)->phone ?? 'N/A',
                     number_format($order->total_price, 2),
                     $this->getStatusLabel($order->status),
                     $order->created_at->format('d/m/Y H:i'),

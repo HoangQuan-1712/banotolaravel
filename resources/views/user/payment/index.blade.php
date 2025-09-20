@@ -24,6 +24,9 @@
                         </div>
                         <div class="card-body">
                             <form id="paymentForm" method="POST" action="{{ route('user.payment.process') }}">
+                                @if(request('order_id'))
+                                    <input type="hidden" name="order_id" value="{{ request('order_id') }}">
+                                @endif
                                 @csrf
 <meta name="csrf-token" content="{{ csrf_token() }}">
                                 <input type="hidden" name="preview_voucher" id="preview_voucher" value="0">
@@ -129,8 +132,7 @@
 
                                 <!-- Nút thanh toán -->
                                 <div class="d-grid gap-2">
-                                    <button type="submit" class="btn btn-warning" 
-                                        onclick="document.getElementById('preview_voucher').value='1'">
+                                    <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#voucherModal">
                                         <i class="fas fa-gift"></i> Chọn voucher / Quà tặng
                                     </button>
                                     <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
@@ -164,7 +166,7 @@
                                             <small class="text-muted">Số lượng: {{ $item['quantity'] }}</small>
                                         </div>
                                         <div class="text-end">
-                                            <strong>{{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }} $</strong>
+                                            <strong>{{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }} đ</strong>
                                         </div>
                                     </div>
                                 @endforeach
@@ -175,11 +177,11 @@
                             <div class="order-total">
                                 <div class="d-flex justify-content-between mb-2">
                                     <span>Tổng tiền hàng:</span>
-                                    <strong>{{ number_format($total, 0, ',', '.') }} $</strong>
+                                    <strong>{{ number_format($total, 0, ',', '.') }} đ</strong>
                                 </div>
                                 <div class="d-flex justify-content-between mb-2">
                                     <span>Tiền cọc (30%):</span>
-                                    <span class="fw-bold text-primary">{{ number_format($total * 0.3, 0, ',', '.') }} $</span>
+                                    <span class="fw-bold text-primary">{{ number_format($total * 0.3, 0, ',', '.') }} đ</span>
                                 </div>
                                 <div class="d-flex justify-content-between mb-2">
                                     <span>Phí vận chuyển:</span>
@@ -188,7 +190,7 @@
                                 <hr>
                                 <div class="d-flex justify-content-between">
                                     <span class="fw-bold fs-5">Số tiền cần đặt cọc:</span>
-                                    <span class="fw-bold fs-5 text-primary">{{ number_format($total * 0.3, 0, ',', '.') }} $</span>
+                                    <span class="fw-bold fs-5 text-primary">{{ number_format($total * 0.3, 0, ',', '.') }} đ</span>
                                 </div>
                             </div>
                         </div>
@@ -226,6 +228,30 @@
     </div>
 </div>
 
+<!-- Modal chọn Voucher -->
+<div class="modal fade" id="voucherModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-gift me-2"></i> Chọn Ưu Đãi & Quà Tặng</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="voucherModalBody">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Đang tìm ưu đãi tốt nhất cho bạn...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary" id="applyVoucherBtn">Áp dụng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal chọn địa chỉ -->
 <div class="modal fade" id="addressSelectionModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -238,7 +264,19 @@
                 @if($addresses->count() > 0)
                     <div class="address-list">
                         @foreach($addresses as $address)
-                            <div class="address-option" data-address-id="{{ $address->id }}">
+                            <div class="address-option"
+                                 data-address-id="{{ $address->id }}"
+                                 data-name="{{ $address->name }}"
+                                 data-phone="{{ $address->phone }}"
+                                 data-address_line_1="{{ $address->address_line_1 }}"
+                                 data-address_line_2="{{ $address->address_line_2 }}"
+                                 data-city="{{ $address->city }}"
+                                 data-district="{{ $address->district }}"
+                                 data-ward="{{ $address->ward }}"
+                                 data-postal_code="{{ $address->postal_code }}"
+                                 data-update-url="{{ route('user.addresses.update', $address) }}"
+                                 data-delete-url="{{ route('user.addresses.destroy', $address) }}"
+                                 data-set-default-url="{{ route('user.addresses.set-default', $address) }}">
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="modal_address_selection" 
                                            id="modal_address_{{ $address->id }}" value="{{ $address->id }}"
@@ -261,6 +299,10 @@
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 @if(!$address->is_default)
+                                                    <button type="button" class="btn btn-sm btn-outline-success" 
+                                                            onclick="setDefaultAddress({{ $address->id }})" title="Đặt mặc định">
+                                                        <i class="fas fa-check-circle"></i>
+                                                    </button>
                                                     <button type="button" class="btn btn-sm btn-outline-danger" 
                                                             onclick="deleteAddress({{ $address->id }})" title="Xóa">
                                                         <i class="fas fa-trash"></i>
@@ -287,6 +329,31 @@
                     Xác nhận
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal sửa địa chỉ -->
+<div class="modal fade" id="editAddressModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-edit"></i> Chỉnh sửa địa chỉ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editAddressForm" method="POST" action="#">
+                @csrf
+                <input type="hidden" name="_method" value="PATCH">
+                <div class="modal-body">
+                    @include('user.addresses.partials.form')
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Lưu thay đổi
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -488,6 +555,93 @@
 </style>
 
 <script>
+// Voucher Modal Logic
+document.addEventListener('DOMContentLoaded', function() {
+    const voucherModal = document.getElementById('voucherModal');
+    const voucherModalBody = document.getElementById('voucherModalBody');
+    const applyVoucherBtn = document.getElementById('applyVoucherBtn');
+    let selectedVoucherId = null;
+
+    voucherModal.addEventListener('show.bs.modal', async function () {
+        try {
+            const response = await fetch('{{ route("vouchers.preview") }}');
+            const data = await response.json();
+            renderVouchers(data);
+        } catch (error) {
+            console.error('Error fetching vouchers:', error);
+            voucherModalBody.innerHTML = '<div class="alert alert-danger">Không thể tải danh sách ưu đãi. Vui lòng thử lại.</div>';
+        }
+    });
+
+    function renderVouchers(data) {
+        let html = '';
+        // Logic to render tiered, vip, random vouchers will go here
+        // For now, a simple message:
+        if (data.tiered_choices && Object.keys(data.tiered_choices).length > 0) {
+            html += '<h6>Quà tặng theo giá trị đơn hàng</h6>';
+            for (const group in data.tiered_choices) {
+                html += `<p><strong>${group}:</strong></p>`;
+                data.tiered_choices[group].forEach(voucher => {
+                    html += `<div class="form-check"><input class="form-check-input" type="radio" name="voucher_selection" value="${voucher.id}" id="voucher-${voucher.id}"><label class="form-check-label" for="voucher-${voucher.id}">${voucher.name} - ${voucher.description}</label></div>`;
+                });
+            }
+        } else {
+            html = '<div class="alert alert-info">Hiện không có ưu đãi nào dành cho bạn.</div>';
+        }
+        voucherModalBody.innerHTML = html;
+
+        // Add event listeners for radio buttons
+        document.querySelectorAll('input[name="voucher_selection"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                selectedVoucherId = this.value;
+            });
+        });
+    }
+
+    // Edit Address via AJAX
+    const editForm = document.getElementById('editAddressForm');
+    if (editForm) {
+        editForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(editForm);
+            fetch(editForm.action, {
+                method: 'POST', // Laravel method spoofing
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) return response.text().then(t => { throw new Error(t) });
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editAddressModal'));
+                    if (modal) modal.hide();
+                    window.location.reload();
+                } else {
+                    alert(data.message || 'Không thể cập nhật địa chỉ');
+                }
+            })
+            .catch(err => alert('Lỗi: ' + err.message));
+        });
+    }
+
+    applyVoucherBtn.addEventListener('click', function() {
+        if (selectedVoucherId) {
+            // Here you would typically apply the voucher via another API call
+            // For now, we just log it and close the modal
+            console.log('Applying voucher:', selectedVoucherId);
+            alert('Voucher ' + selectedVoucherId + ' đã được chọn (logic áp dụng sẽ được thêm vào).');
+            bootstrap.Modal.getInstance(voucherModal).hide();
+        } else {
+            alert('Vui lòng chọn một ưu đãi.');
+        }
+    });
+});
+
 function selectPaymentMethod(method, el) {
     // Remove active class from all cards
     document.querySelectorAll('.payment-method-card').forEach(card => {

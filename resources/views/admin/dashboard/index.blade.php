@@ -221,7 +221,7 @@
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <div>
                                     <strong>#{{ $order->id }}</strong><br>
-                                    <small class="text-muted">{{ $order->user->name }}</small>
+                                    <small class="text-muted">{{ optional($order->user)->name ?? 'Khách hàng (N/A)' }}</small>
                                 </div>
                                 <div class="text-end">
                                     <span class="fw-bold">{{ number_format($order->total_price, 0, ',', '.') }} $</span><br>

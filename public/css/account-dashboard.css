@@ -1,0 +1,153 @@
+/* --- General Styling --- */
+body {
+    background-color: #f8f9fa;
+}
+
+.account-container {
+    padding-top: 2rem;
+    padding-bottom: 4rem;
+}
+
+.account-header {
+    margin-bottom: 2rem;
+    font-weight: 700;
+    color: #343a40;
+}
+
+/* --- Card Styling --- */
+.account-card {
+    background-color: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.account-card-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e9ecef;
+    background-color: transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.account-card-header h5 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #343a40;
+}
+
+.account-card-body {
+    padding: 1.5rem;
+    flex-grow: 1;
+}
+
+/* --- Profile Card --- */
+.profile-card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.profile-avatar {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background-color: #0d6efd;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.profile-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.profile-email {
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+
+.profile-tier {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.profile-tier .badge {
+    font-size: 0.9rem;
+    padding: 0.4em 0.8em;
+}
+
+.profile-actions {
+    margin-top: 1.5rem;
+    width: 100%;
+}
+
+.profile-actions .btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+/* --- Address Card --- */
+.address-item {
+    padding: 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.address-item.is-default {
+    border-color: #0d6efd;
+    background-color: #f8faff;
+}
+
+.address-item p {
+    margin-bottom: 0.25rem;
+}
+
+.address-actions {
+    margin-top: 0.75rem;
+}
+
+.default-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+/* --- Empty State --- */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    height: 100%;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: #ced4da;
+}
+
+/* --- Modal Forms --- */
+.modal-body .form-label {
+    font-weight: 600;
+}

@@ -115,7 +115,7 @@
                             <h6><i class="fas fa-clock"></i> Đơn hàng cần xử lý gấp</h6>
                             <ul class="mb-0">
                                 @foreach($urgentOrders->take(5) as $order)
-                                    <li><strong>#{{ $order->id }}</strong> - {{ $order->user->name }} ({{ $order->status }}) - {{ $order->created_at->diffForHumans() }}</li>
+                                    <li><strong>#{{ $order->id }}</strong> - {{ optional($order->user)->name ?? 'Khách hàng (N/A)' }} ({{ $order->status }}) - {{ $order->created_at->diffForHumans() }}</li>
                                 @endforeach
                             </ul>
                             @if($urgentOrders->count() > 5)

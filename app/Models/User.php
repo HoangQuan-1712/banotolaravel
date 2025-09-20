@@ -20,6 +20,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'role',  // Thêm role
         'phone',
         'address',
+        'tier_id',
+        'lifetime_spent',
+        'total_cars_bought',
+        'tier_updated_at',
     ];
 
     protected $hidden = [
@@ -119,16 +123,37 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->orders()->where('status', Order::STATUS_COMPLETED)->exists();
     }
-    public function tier(){ return $this->belongsTo(CustomerTier::class,'tier_id'); }
+    public function tier()
+    {
+        return $this->belongsTo(CustomerTier::class, 'tier_id');
+    }
+
+    public function voucherUsages()
+    {
+        return $this->hasMany(VoucherUsage::class);
+    }
 
     // Lấy thông tin tóm tắt về đơn hàng để hiển thị khi admin xóa user
+    public function getLifetimeSpentAttribute()
+    {
+        $completedSpent = $this->orders()
+            ->where('status', Order::STATUS_COMPLETED)
+            ->sum('total_price');
+
+        $depositSpent = $this->orders()
+            ->whereIn('status', ['đã đặt cọc (COD)', 'đã đặt cọc (MoMo)'])
+            ->sum('deposit_amount');
+
+        return $completedSpent + $depositSpent;
+    }
+
     public function getOrderSummaryAttribute()
     {
         return [
             'total_orders' => $this->orders()->count(),
             'completed_orders' => $this->orders()->where('status', Order::STATUS_COMPLETED)->count(),
             'pending_orders' => $this->orders()->where('status', Order::STATUS_PENDING)->count(),
-            'total_spent' => $this->orders()->where('status', Order::STATUS_COMPLETED)->sum('total_price'),
+            'total_spent' => $this->getLifetimeSpentAttribute(),
         ];
     }
 };

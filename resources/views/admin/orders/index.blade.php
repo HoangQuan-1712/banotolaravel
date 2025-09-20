@@ -107,10 +107,10 @@
                                         </td>
                                         <td>
                                             <div>
-                                                <strong>{{ $order->user->name }}</strong><br>
-                                                <small class="text-muted">{{ $order->user->email }}</small>
-                                                @if($order->user->phone)
-                                                    <br><small class="text-muted">📱 {{ $order->user->phone }}</small>
+                                                <strong>{{ optional($order->user)->name ?? 'Khách hàng (N/A)' }}</strong><br>
+                                                <small class="text-muted">{{ optional($order->user)->email ?? 'N/A' }}</small>
+                                                @if(optional($order->user)->phone)
+                                                    <br><small class="text-muted">📱 {{ optional($order->user)->phone }}</small>
                                                 @endif
                                             </div>
                                         </td>

@@ -69,15 +69,15 @@
                                     <div class="row text-center">
                                         <div class="col-md-4">
                                             <h6 class="text-muted">Tổng tiền</h6>
-                                            <h4 class="text-primary">{{ number_format($order->total_price, 0, ',', '.') }} $</h4>
+                                            <h4 class="text-primary">{{ number_format($order->total_price, 0, ',', '.') }} đ</h4>
                                         </div>
                                         <div class="col-md-4">
                                             <h6 class="text-muted">Tiền cọc (30%)</h6>
-                                            <h4 class="text-success">{{ number_format($order->deposit_amount, 0, ',', '.') }} $</h4>
+                                            <h4 class="text-success">{{ number_format($order->deposit_amount, 0, ',', '.') }} đ</h4>
                                         </div>
                                         <div class="col-md-4">
                                             <h6 class="text-muted">Còn lại</h6>
-                                            <h4 class="text-info">{{ number_format($order->total_price - $order->deposit_amount, 0, ',', '.') }} $</h4>
+                                            <h4 class="text-info">{{ number_format($order->total_price - $order->deposit_amount, 0, ',', '.') }} đ</h4>
                                         </div>
                                     </div>
                                 </div>
@@ -115,9 +115,9 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>{{ number_format($item->price, 0, ',', '.') }} $</td>
+                                        <td>{{ number_format($item->price, 0, ',', '.') }} đ</td>
                                         <td>{{ $item->quantity }}</td>
-                                        <td>{{ number_format($item->price * $item->quantity, 0, ',', '.') }} $</td>
+                                        <td>{{ number_format($item->price * $item->quantity, 0, ',', '.') }} đ</td>
                                     </tr>
                                     @endforeach
                                 </tbody>

@@ -10,9 +10,16 @@ class TierService {
      */
     public function updateUserTier(User $user): ?CustomerTier {
         // Tính tổng chi tiêu từ các đơn hàng đã hoàn thành
-        $totalSpent = $user->orders()
+        $completedSpent = $user->orders()
             ->where('status', Order::STATUS_COMPLETED)
-            ->sum('total');
+            ->sum('total_price');
+
+        // Tính tổng tiền cọc từ các đơn hàng đã đặt cọc nhưng chưa hoàn thành
+        $depositSpent = $user->orders()
+            ->whereIn('status', ['đã đặt cọc (COD)', 'đã đặt cọc (MoMo)'])
+            ->sum('deposit_amount');
+
+        $totalSpent = $completedSpent + $depositSpent;
 
         // Đếm số xe đã mua
         $totalCars = $user->orders()
@@ -53,11 +60,44 @@ class TierService {
             $message = "Chúc mừng! Bạn đã được nâng cấp từ {$oldTier->name} lên {$newTier->name}!";
         }
 
+        $awardedVouchers = [];
+        if ($upgraded && $newTier) {
+            // Find all welcome vouchers for the new tier
+            $welcomeVouchers = \App\Models\Voucher::where('type', 'vip_tier')
+                ->where('tier_level', $newTier->level)
+                ->get();
+
+            if ($welcomeVouchers->isNotEmpty()) {
+                $awardedVoucherMessages = [];
+                foreach ($welcomeVouchers as $voucher) {
+                    // Check if the user has already been awarded this specific voucher
+                    $alreadyAwarded = \App\Models\VoucherUsage::where('voucher_id', $voucher->id)
+                        ->where('user_id', $user->id)
+                        ->exists();
+
+                    if (!$alreadyAwarded) {
+                        // Award the voucher by creating a usage record with used_at as null
+                        \App\Models\VoucherUsage::create([
+                            'voucher_id' => $voucher->id,
+                            'user_id' => $user->id,
+                            'used_at' => null, // Set to null to indicate it's awarded, not used
+                        ]);
+                        $awardedVouchers[] = $voucher;
+                        $awardedVoucherMessages[] = "'{$voucher->name}'";
+                    }
+                }
+                if (!empty($awardedVoucherMessages)) {
+                    $message .= " Bạn đã nhận được các voucher: " . implode(', ', $awardedVoucherMessages) . ".";
+                }
+            }
+        }
+
         return [
             'upgraded' => $upgraded,
             'old_tier' => $oldTier,
             'new_tier' => $newTier,
-            'message' => $message
+            'message' => $message,
+            'awarded_vouchers' => $awardedVouchers
         ];
     }
 
@@ -68,37 +108,37 @@ class TierService {
         $tiers = [
             [
                 'level' => 'bronze',
-                'name' => 'Bronze Member',
-                'min_spent' => 0,
-                'benefits' => 'Ưu đãi cơ bản: Tư vấn miễn phí, hỗ trợ kỹ thuật 24/7',
+                'name' => 'Hạng Đồng',
+                'min_spent' => 15000, // $15,000
+                'benefits' => 'Voucher giảm giá 2% cho lần mua phụ kiện tiếp theo.',
                 'color' => '#CD7F32',
                 'priority_support' => 1,
                 'discount_percentage' => 0
             ],
             [
                 'level' => 'silver',
-                'name' => 'Silver VIP',
-                'min_spent' => 50000, // $50k - mua 1 xe cỡ trung
-                'benefits' => 'Ưu đãi Silver: Giảm 5% phí dịch vụ, bảo dưỡng miễn phí 6 tháng, ưu tiên hỗ trợ',
+                'name' => 'Hạng Bạc',
+                'min_spent' => 50000, // $50,000
+                'benefits' => 'Tặng voucher bảo dưỡng miễn phí 1 lần, giảm 5% phí dịch vụ.',
                 'color' => '#C0C0C0',
                 'priority_support' => 2,
                 'discount_percentage' => 5.00
             ],
             [
                 'level' => 'gold',
-                'name' => 'Gold Elite',
-                'min_spent' => 150000, // $150k - mua xe cao cấp hoặc 2-3 xe
-                'benefits' => 'Ưu đãi Gold: Giảm 10% phí dịch vụ, bảo dưỡng miễn phí 1 năm, voucher bảo hiểm, tư vấn VIP',
+                'name' => 'Hạng Vàng',
+                'min_spent' => 120000, // $120,000
+                'benefits' => 'Tặng voucher bảo hiểm vật chất trị giá $200, bảo dưỡng miễn phí 1 năm.',
                 'color' => '#FFD700',
                 'priority_support' => 3,
                 'discount_percentage' => 10.00
             ],
             [
                 'level' => 'platinum',
-                'name' => 'Platinum Exclusive',
-                'min_spent' => 500000, // $500k - khách hàng doanh nghiệp hoặc siêu giàu
-                'benefits' => 'Ưu đãi Platinum: Giảm 15% phí dịch vụ, bảo dưỡng miễn phí 2 năm, voucher du lịch VIP, quản lý tài khoản riêng',
-                'color' => '#E5E4E2',
+                'name' => 'Hạng Kim Cương',
+                'min_spent' => 300000, // $300,000
+                'benefits' => 'Quà tặng đặc biệt (vd: Gói du lịch), quản lý tài khoản riêng, giảm 15% mọi dịch vụ.',
+                'color' => '#b9f2ff',
                 'priority_support' => 4,
                 'discount_percentage' => 15.00
             ]

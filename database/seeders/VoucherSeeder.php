@@ -147,6 +147,19 @@ class VoucherSeeder extends Seeder
             ]
         ];
 
+        // DISCOUNT VOUCHERS - Direct price reduction
+        $discountVouchers = [
+            [
+                'code' => 'DISC_5PCT',
+                'type' => 'discount',
+                'name' => 'Giảm giá trực tiếp $2,000',
+                'description' => 'Voucher giảm trực tiếp $2,000 vào đơn đặt cọc.',
+                'value' => 2000.00,
+                'usage_limit_per_user' => 1,
+                'active' => true,
+            ],
+        ];
+
         // VIP TIER VOUCHERS - Loyalty program
         $vipTierVouchers = [
             // Silver VIP
@@ -209,7 +222,19 @@ class VoucherSeeder extends Seeder
         ];
 
 // Create all vouchers
-$allVouchers = array_merge($tieredChoiceVouchers, $randomGiftVouchers);
+$allVouchers = array_merge($tieredChoiceVouchers, $randomGiftVouchers, $discountVouchers);
+
+// Normalize: ensure all vouchers are active by default unless explicitly disabled
+$allVouchers = array_map(function($v) {
+    if (!array_key_exists('active', $v)) {
+        $v['active'] = true;
+    }
+    // Default per-user usage to 1 if not set for gift-like vouchers
+    if (!array_key_exists('usage_limit_per_user', $v)) {
+        $v['usage_limit_per_user'] = 1;
+    }
+    return $v;
+}, $allVouchers);
 
 $created = 0;
 $updated = 0;
@@ -253,5 +278,5 @@ foreach ($vipVouchers as $v) {
 }
 
 $this->command->info('VIP tier vouchers seeded.');
-
     }
+}

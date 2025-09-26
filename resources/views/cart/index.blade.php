@@ -197,25 +197,27 @@
 </style>
 
 <script>
-// Auto-submit form when quantity changes
+// Auto-submit form when quantity changes and show spinner on actual form submit only
 document.addEventListener('DOMContentLoaded', function() {
     const quantityInputs = document.querySelectorAll('input[name="quantity"]');
-    
+
     quantityInputs.forEach(input => {
         input.addEventListener('change', function() {
-            // Add a small delay to prevent multiple submissions
             setTimeout(() => {
-                this.form.submit();
+                if (this.form) this.form.requestSubmit();
             }, 100);
         });
     });
-    
-    // Add loading state to buttons
-    const buttons = document.querySelectorAll('button[type="submit"]');
-    buttons.forEach(button => {
-        button.addEventListener('click', function() {
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
-            this.disabled = true;
+
+    // Attach submit handlers to forms to show loading state per form
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            // Find the submit button within this form
+            const btn = this.querySelector('button[type="submit"]');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
+                btn.disabled = true;
+            }
         });
     });
 });

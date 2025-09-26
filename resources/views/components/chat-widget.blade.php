@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('[WIDGET] Initializing chat...');
             
             // Create or get existing chat
-            const response = await fetch('/chat', {
+            const response = await fetch('/chat/my', {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -362,13 +362,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateAdminStatus() {
-        const now = new Date();
-        const hour = now.getHours();
-        const isBusinessHours = hour >= 8 && hour <= 22;
-        
-        adminStatus.innerHTML = isBusinessHours ? 
-            '<i class="fas fa-circle text-success"></i> Admin đang online' :
-            '<i class="fas fa-circle text-secondary"></i> Ngoài giờ làm việc';
+        // For testing: show online 24/7
+        adminStatus.innerHTML = '<i class="fas fa-circle text-success"></i> Admin đang online';
     }
 
     function showWidgetError(message) {

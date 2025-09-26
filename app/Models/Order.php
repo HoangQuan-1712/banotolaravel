@@ -96,6 +96,11 @@ class Order extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function voucherUsages()
+    {
+        return $this->hasMany(VoucherUsage::class);
+    }
+
     // Inventory reservation logic
     public function reserveStock(): void
     {

@@ -86,24 +86,18 @@ class VoucherService {
      * Apply voucher vào đơn hàng
      */
     public function applyVoucher(Voucher $voucher, Order $order, User $user): bool {
-        if (!$voucher->canBeUsedBy($user, $order->total)) {
+        // Use total_price (existing field) to validate order value
+        if (!$voucher->canBeUsedBy($user, $order->total_price)) {
             return false;
         }
-        // Exclusivity: only one voucher/gift per order
-        $alreadyClaimed = $order->items()
-                ->where('metadata->type', 'voucher_gift')
-                ->exists()
-            || $order->adjustments()
-                ->where('type', 'voucher_discount')
-                ->exists()
-            || VoucherUsage::where('order_id', $order->id)->exists();
 
+        // Only one voucher per order: if any usage exists, block
+        $alreadyClaimed = VoucherUsage::where('order_id', $order->id)->exists();
         if ($alreadyClaimed) {
             return false;
         }
 
         return DB::transaction(function() use($voucher, $order, $user) {
-            // Tạo record usage
             VoucherUsage::create([
                 'voucher_id' => $voucher->id,
                 'user_id' => $user->id,
@@ -111,17 +105,14 @@ class VoucherService {
                 'used_at' => now(),
             ]);
 
-            // Tăng số lần sử dụng
+            // Increment usage counters and adjust stock if applicable
             $voucher->increment('used_count');
-            
-            // Giảm stock nếu có
-            if ($voucher->stock !== null) {
+            if (!is_null($voucher->stock)) {
                 $voucher->decrement('stock');
             }
 
-            // Áp dụng voucher vào đơn hàng
-            $this->applyVoucherToOrder($voucher, $order);
-
+            // Note: For discount-type vouchers, we are adjusting totals in OrderController.
+            // For gift-type vouchers, usage record is sufficient; UI reads voucherUsages.
             return true;
         });
     }
@@ -130,59 +121,9 @@ class VoucherService {
      * Áp dụng voucher vào đơn hàng cụ thể
      */
     private function applyVoucherToOrder(Voucher $voucher, Order $order): void {
-        switch ($voucher->type) {
-            case 'tiered_choice':
-            case 'random_gift':
-            case 'vip_tier':
-                // Thêm vào order items như một món quà
-                $order->items()->create([
-                    'product_id' => null, // Không phải sản phẩm thực
-                    'product_name' => $voucher->name,
-                    'price' => 0, // Miễn phí
-                    'quantity' => 1,
-                    'total' => 0,
-                    'metadata' => [
-                        'type' => 'voucher_gift',
-                        'voucher_id' => $voucher->id,
-                        'voucher_code' => $voucher->code,
-                        'description' => $voucher->description
-                    ]
-                ]);
-                break;
-
-            case 'discount':
-                // Tạo adjustment giảm giá
-                $discountAmount = min($voucher->value, $order->subtotal);
-                $order->adjustments()->create([
-                    'type' => 'voucher_discount',
-                    'label' => "Voucher: {$voucher->name}",
-                    'amount' => -$discountAmount, // Số âm = giảm giá
-                    'metadata' => [
-                        'voucher_id' => $voucher->id,
-                        'voucher_code' => $voucher->code
-                    ]
-                ]);
-                
-                // Cập nhật lại total
-                $order->recalculateTotal();
-                break;
-
-            case 'service_voucher':
-                // Thêm dịch vụ miễn phí
-                $order->items()->create([
-                    'product_id' => null,
-                    'product_name' => $voucher->name,
-                    'price' => $voucher->value ?? 0,
-                    'quantity' => 1,
-                    'total' => 0, // Miễn phí nhưng hiển thị giá trị
-                    'metadata' => [
-                        'type' => 'service_voucher',
-                        'voucher_id' => $voucher->id,
-                        'original_value' => $voucher->value
-                    ]
-                ]);
-                break;
-        }
+        // Deprecated in this simplified model: we surface voucher usage via VoucherUsage relation.
+        // Kept for compatibility; no-op.
+        return;
     }
 
     /**

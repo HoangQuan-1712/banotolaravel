@@ -30,6 +30,7 @@
                                 @csrf
 <meta name="csrf-token" content="{{ csrf_token() }}">
                                 <input type="hidden" name="preview_voucher" id="preview_voucher" value="0">
+                                <input type="hidden" name="selected_voucher_id" id="selected_voucher_id" value="">
                                 
                                 <!-- Địa chỉ giao hàng (Shopee style) -->
                                 <div class="mb-3">
@@ -179,6 +180,18 @@
                                     <span>Tổng tiền hàng:</span>
                                     <strong>{{ number_format($total, 0, ',', '.') }} đ</strong>
                                 </div>
+                                <div class="d-flex justify-content-between mb-2" id="voucherDiscountRow" style="display:none;">
+                                    <span>Giảm giá voucher:</span>
+                                    <strong class="text-success" id="voucherDiscountText">-0 đ</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2" id="adjustedSubtotalRow" style="display:none;">
+                                    <span>Tạm tính sau giảm:</span>
+                                    <strong id="adjustedSubtotalText">0 đ</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2" id="selectedVoucherRow" style="display:none;">
+                                    <span>Voucher đã chọn:</span>
+                                    <strong id="selectedVoucherText">(chưa chọn)</strong>
+                                </div>
                                 <div class="d-flex justify-content-between mb-2">
                                     <span>Tiền cọc (30%):</span>
                                     <span class="fw-bold text-primary">{{ number_format($total * 0.3, 0, ',', '.') }} đ</span>
@@ -190,7 +203,7 @@
                                 <hr>
                                 <div class="d-flex justify-content-between">
                                     <span class="fw-bold fs-5">Số tiền cần đặt cọc:</span>
-                                    <span class="fw-bold fs-5 text-primary">{{ number_format($total * 0.3, 0, ',', '.') }} đ</span>
+                                    <span class="fw-bold fs-5 text-primary" id="depositText">{{ number_format($total * 0.3, 0, ',', '.') }} đ</span>
                                 </div>
                             </div>
                         </div>
@@ -562,9 +575,58 @@ document.addEventListener('DOMContentLoaded', function() {
     const applyVoucherBtn = document.getElementById('applyVoucherBtn');
     let selectedVoucherId = null;
 
+    // Restore previously selected voucher from localStorage (if any) and update UI
+    (async function restoreVoucherSelection() {
+        try {
+            const stored = localStorage.getItem('selected_voucher_id');
+            if (stored) {
+                document.getElementById('selected_voucher_id').value = stored;
+                selectedVoucherId = stored;
+                const url = '{{ route("vouchers.preview-apply") }}' + '?voucher_id=' + encodeURIComponent(stored) + '&amount=' + encodeURIComponent({{ (int) $total }});
+                const res = await fetch(url, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin'
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.ok) {
+                        const discount = Math.round(data.discount || 0);
+                        const newTotal = Math.round(data.new_total || {{ (int) $total }});
+                        const newDeposit = Math.round(data.new_deposit || ({{ (int) $total }} * 0.3));
+                        const fmt = (n) => n.toLocaleString('vi-VN') + ' đ';
+                        document.getElementById('voucherDiscountText').textContent = '-' + fmt(discount);
+                        document.getElementById('adjustedSubtotalText').textContent = fmt(newTotal);
+                        document.getElementById('depositText').textContent = fmt(newDeposit);
+                        document.getElementById('voucherDiscountRow').style.display = discount > 0 ? '' : 'none';
+                        document.getElementById('adjustedSubtotalRow').style.display = discount > 0 ? '' : 'none';
+                        const name = data.voucher?.name || 'Voucher đã chọn';
+                        document.getElementById('selectedVoucherText').textContent = name;
+                        document.getElementById('selectedVoucherRow').style.display = '';
+                    }
+                }
+            }
+        } catch (e) { console.warn('Restore voucher failed', e); }
+    })();
+
     voucherModal.addEventListener('show.bs.modal', async function () {
         try {
-            const response = await fetch('{{ route("vouchers.preview") }}');
+            const previewUrl = '{{ route("vouchers.preview") }}' + '?amount=' + encodeURIComponent({{ (int) $total }});
+            const response = await fetch(previewUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                console.error('Voucher preview failed:', response.status, text);
+                voucherModalBody.innerHTML = '<div class="alert alert-danger">Không thể tải danh sách ưu đãi (mã ' + response.status + '). Vui lòng thử lại.</div>';
+                return;
+            }
+
             const data = await response.json();
             renderVouchers(data);
         } catch (error) {
@@ -575,19 +637,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderVouchers(data) {
         let html = '';
-        // Logic to render tiered, vip, random vouchers will go here
-        // For now, a simple message:
+
+        // VIP tier vouchers
+        if (data.vip_tier_vouchers && data.vip_tier_vouchers.length) {
+            html += '<div class="mb-3"><h6><i class="fas fa-crown text-warning me-1"></i> Ưu đãi VIP của bạn</h6>';
+            data.vip_tier_vouchers.forEach(voucher => {
+                html += `<div class="form-check">
+                    <input class="form-check-input" type="radio" name="voucher_selection" value="${voucher.id}" id="voucher-${voucher.id}">
+                    <label class="form-check-label" for="voucher-${voucher.id}">
+                        <strong>${voucher.name}</strong>${voucher.description ? ' - ' + voucher.description : ''}
+                    </label>
+                </div>`;
+            });
+            html += '</div>';
+        }
+
+        // Tiered choices by group
         if (data.tiered_choices && Object.keys(data.tiered_choices).length > 0) {
-            html += '<h6>Quà tặng theo giá trị đơn hàng</h6>';
+            html += '<div class="mb-3"><h6><i class="fas fa-layer-group text-primary me-1"></i> Quà tặng theo giá trị đơn hàng</h6>';
             for (const group in data.tiered_choices) {
-                html += `<p><strong>${group}:</strong></p>`;
+                html += `<p class="mb-1 text-muted"><strong>${group}</strong></p>`;
                 data.tiered_choices[group].forEach(voucher => {
-                    html += `<div class="form-check"><input class="form-check-input" type="radio" name="voucher_selection" value="${voucher.id}" id="voucher-${voucher.id}"><label class="form-check-label" for="voucher-${voucher.id}">${voucher.name} - ${voucher.description}</label></div>`;
+                    html += `<div class="form-check">
+                        <input class="form-check-input" type="radio" name="voucher_selection" value="${voucher.id}" id="voucher-${voucher.id}">
+                        <label class="form-check-label" for="voucher-${voucher.id}">
+                            <strong>${voucher.name}</strong>${voucher.description ? ' - ' + voucher.description : ''}
+                        </label>
+                    </div>`;
                 });
             }
-        } else {
+            html += '</div>';
+        }
+
+        // Random gift availability
+        if (data.random_gift_available) {
+            html += `<div class="alert alert-warning d-flex align-items-center" role="alert">
+                <i class="fas fa-dice me-2"></i>
+                Bạn có thể nhận 1 quà ngẫu nhiên sau khi tạo đơn!
+            </div>`;
+        }
+
+        if (!html) {
             html = '<div class="alert alert-info">Hiện không có ưu đãi nào dành cho bạn.</div>';
         }
+
         voucherModalBody.innerHTML = html;
 
         // Add event listeners for radio buttons
@@ -596,6 +689,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectedVoucherId = this.value;
             });
         });
+
+        // Preselect previously chosen voucher if any
+        const prev = document.getElementById('selected_voucher_id')?.value;
+        if (prev) {
+            const el = document.querySelector(`input[name="voucher_selection"][value="${prev}"]`);
+            if (el) {
+                el.checked = true;
+                selectedVoucherId = prev;
+            }
+        }
     }
 
     // Edit Address via AJAX
@@ -629,15 +732,55 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    applyVoucherBtn.addEventListener('click', function() {
-        if (selectedVoucherId) {
-            // Here you would typically apply the voucher via another API call
-            // For now, we just log it and close the modal
-            console.log('Applying voucher:', selectedVoucherId);
-            alert('Voucher ' + selectedVoucherId + ' đã được chọn (logic áp dụng sẽ được thêm vào).');
-            bootstrap.Modal.getInstance(voucherModal).hide();
-        } else {
+    applyVoucherBtn.addEventListener('click', async function() {
+        if (!selectedVoucherId) {
             alert('Vui lòng chọn một ưu đãi.');
+            return;
+        }
+
+        try {
+            const url = '{{ route("vouchers.preview-apply") }}' + '?voucher_id=' + encodeURIComponent(selectedVoucherId) + '&amount=' + encodeURIComponent({{ (int) $total }});
+            const res = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                const msg = data.message || 'Voucher không áp dụng được.';
+                alert(msg);
+                return;
+            }
+
+            // Update hidden input to submit with form
+            document.getElementById('selected_voucher_id').value = selectedVoucherId;
+            localStorage.setItem('selected_voucher_id', String(selectedVoucherId));
+
+            // Update UI totals
+            const discount = Math.round(data.discount || 0);
+            const newTotal = Math.round(data.new_total || {{ (int) $total }});
+            const newDeposit = Math.round(data.new_deposit || ({{ (int) $total }} * 0.3));
+
+            const fmt = (n) => n.toLocaleString('vi-VN') + ' đ';
+
+            document.getElementById('voucherDiscountText').textContent = '-' + fmt(discount);
+            document.getElementById('adjustedSubtotalText').textContent = fmt(newTotal);
+            document.getElementById('depositText').textContent = fmt(newDeposit);
+            document.getElementById('voucherDiscountRow').style.display = discount > 0 ? '' : 'none';
+            document.getElementById('adjustedSubtotalRow').style.display = discount > 0 ? '' : 'none';
+
+            // Show selected voucher summary (name). For gifts, discount == 0 but still show name
+            const name = data.voucher?.name || 'Voucher đã chọn';
+            document.getElementById('selectedVoucherText').textContent = name;
+            document.getElementById('selectedVoucherRow').style.display = '';
+
+            // Close modal
+            bootstrap.Modal.getInstance(voucherModal).hide();
+        } catch (e) {
+            console.error(e);
+            alert('Không thể áp dụng voucher.');
         }
     });
 });
@@ -669,6 +812,8 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
     const submitBtn = document.getElementById('submitBtn');
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
     submitBtn.disabled = true;
+    // Clear stored voucher after submit to avoid leaking to next session
+    try { localStorage.removeItem('selected_voucher_id'); } catch(_) {}
 });
 
 // Auto-select first payment method on load

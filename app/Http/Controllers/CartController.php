@@ -25,11 +25,12 @@ class CartController extends Controller
                     $details['price'] = $product->price;
                     $details['image'] = $product->image;
                     $details['category'] = optional($product->category)->name ?? 'Sản phẩm';
-                    $details['max_quantity'] = $product->quantity;
+                    $available = max(0, (int)$product->quantity - (int)($product->reserved_quantity ?? 0));
+                    $details['max_quantity'] = $available;
 
-                    // Đảm bảo số lượng trong giỏ không vượt quá tồn kho
-                    if ($details['quantity'] > $product->quantity) {
-                        $details['quantity'] = $product->quantity;
+                    // Đảm bảo số lượng trong giỏ không vượt quá số lượng còn khả dụng
+                    if ($details['quantity'] > $available) {
+                        $details['quantity'] = $available;
                     }
                 } else {
                     // Nếu sản phẩm không còn tồn tại, loại bỏ khỏi giỏ hàng
@@ -53,11 +54,16 @@ class CartController extends Controller
     // Thêm sản phẩm vào giỏ hàng
     public function add(Request $request, Product $product)
     {
-        $quantity = $request->input('quantity', 1);
+        $quantity = (int) $request->input('quantity', 1);
+        if ($quantity < 1) { $quantity = 1; }
         
-        // Kiểm tra số lượng tồn kho
-        if ($quantity > $product->quantity) {
-            return redirect()->back()->with('error', 'Số lượng vượt quá tồn kho. Chỉ còn ' . $product->quantity . ' sản phẩm.');
+        // Kiểm tra số lượng còn khả dụng (tồn kho trừ số đã giữ chỗ)
+        $available = max(0, (int)$product->quantity - (int)($product->reserved_quantity ?? 0));
+        if ($available <= 0) {
+            return redirect()->back()->with('error', 'Sản phẩm đã hết hàng.');
+        }
+        if ($quantity > $available) {
+            return redirect()->back()->with('error', 'Số lượng vượt quá khả dụng. Chỉ còn ' . $available . ' sản phẩm.');
         }
         
         $cart = session()->get('cart', []);
@@ -65,9 +71,9 @@ class CartController extends Controller
         if (isset($cart[$product->id])) {
             $newQuantity = $cart[$product->id]['quantity'] + $quantity;
             
-            // Kiểm tra tổng số lượng sau khi thêm
-            if ($newQuantity > $product->quantity) {
-                return redirect()->back()->with('error', 'Tổng số lượng vượt quá tồn kho. Chỉ còn ' . $product->quantity . ' sản phẩm.');
+            // Kiểm tra tổng số lượng sau khi thêm theo số lượng còn khả dụng
+            if ($newQuantity > $available) {
+                return redirect()->back()->with('error', 'Tổng số lượng vượt quá khả dụng. Chỉ còn ' . $available . ' sản phẩm.');
             }
             
             $cart[$product->id]['quantity'] = $newQuantity;
@@ -86,7 +92,7 @@ class CartController extends Controller
                 $cart[$product->id]['price'] = $product->price;
             }
             if (!isset($cart[$product->id]['max_quantity'])) {
-                $cart[$product->id]['max_quantity'] = $product->quantity;
+                $cart[$product->id]['max_quantity'] = $available;
             }
         } else {
             $cart[$product->id] = [
@@ -96,7 +102,7 @@ class CartController extends Controller
                 "price" => $product->price,
                 "category" => optional($product->category)->name ?? 'Sản phẩm',
                 "image" => $product->image, // Lưu đường dẫn tương đối thay vì URL đầy đủ
-                "max_quantity" => $product->quantity
+                "max_quantity" => $available
             ];
         }
 
@@ -107,16 +113,21 @@ class CartController extends Controller
     // Cập nhật số lượng sản phẩm
     public function update(Request $request, $id)
     {
-        $quantity = $request->input('quantity');
+        $quantity = (int) $request->input('quantity');
         $product = Product::findOrFail($id);
         
         if ($quantity <= 0) {
-            return $this->remove($product);
+            // Xóa sản phẩm nếu người dùng nhập 0 hoặc âm
+            return $this->remove($product->id);
         }
         
-        // Kiểm tra số lượng tồn kho
-        if ($quantity > $product->quantity) {
-            return redirect()->route('cart.index')->with('error', 'Số lượng vượt quá tồn kho. Chỉ còn ' . $product->quantity . ' sản phẩm.');
+        // Kiểm tra số lượng còn khả dụng
+        $available = max(0, (int)$product->quantity - (int)($product->reserved_quantity ?? 0));
+        if ($available <= 0) {
+            return redirect()->route('cart.index')->with('error', 'Sản phẩm đã hết hàng.');
+        }
+        if ($quantity > $available) {
+            return redirect()->route('cart.index')->with('error', 'Số lượng vượt quá khả dụng. Chỉ còn ' . $available . ' sản phẩm.');
         }
         
         $cart = session()->get('cart', []);

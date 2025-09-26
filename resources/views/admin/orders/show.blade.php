@@ -145,6 +145,31 @@
                                     @endif
                                 </div>
                             </div>
+                            @if($order->voucherUsages && $order->voucherUsages->isNotEmpty())
+                            <div class="card mt-3">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-gift"></i> Voucher/Quà tặng đã sử dụng</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="mb-0">
+                                        @foreach($order->voucherUsages as $vu)
+                                            <li>
+                                                <strong>{{ $vu->voucher->name ?? ('Voucher #'.$vu->voucher_id) }}</strong>
+                                                @if(!empty($vu->voucher?->code))
+                                                    <span class="badge bg-secondary ms-1">{{ $vu->voucher->code }}</span>
+                                                @endif
+                                                @if(!empty($vu->voucher?->description))
+                                                    <div class="text-muted small">{{ $vu->voucher->description }}</div>
+                                                @endif
+                                                @if(!empty($vu->used_at))
+                                                    <small class="text-muted">Dùng lúc {{ \Carbon\Carbon::parse($vu->used_at)->format('d/m/Y H:i') }}</small>
+                                                @endif
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            </div>
+                            @endif
                         </div>
                     </div>
 

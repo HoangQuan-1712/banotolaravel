@@ -15,10 +15,27 @@ class AccountController extends Controller
     {
         $user = Auth::user()->load('tier');
         $addresses = $user->addresses()->orderBy('is_default', 'desc')->get();
-        $vouchers = collect();
+        // Available vouchers (not yet used by this user)
+        $base = Voucher::active()->whereDoesntHave('usages', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        });
+
+        $vipVouchers = collect();
         if ($user->tier) {
-            $vouchers = Voucher::active()->vipTier($user->tier->level)->get();
+            $vipVouchers = (clone $base)->vipTier($user->tier->level)->get();
         }
+
+        $discountVouchers = (clone $base)->where('type', 'discount')->get();
+        $tieredVouchers = (clone $base)->where('type', 'tiered_choice')->orderBy('min_order_value')->get();
+        $randomGiftVouchers = (clone $base)->where('type', 'random_gift')->get();
+
+        $vouchers = [
+            'vip' => $vipVouchers,
+            'discount' => $discountVouchers,
+            'tiered_choice' => $tieredVouchers,
+            'random_gift' => $randomGiftVouchers,
+        ];
+
         return view('user.account.dashboard', compact('user', 'addresses', 'vouchers'));
     }
 

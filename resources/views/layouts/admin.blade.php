@@ -253,10 +253,10 @@
 <body>
     <nav class="navbar navbar-expand-lg admin-navbar mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ route('admin.dashboard.index') }}">
-                <i class="fas fa-user-shield brand-icon"></i> 
-                <span class="brand-text">Admin Panel</span>
+            <a class="menu-item {{ request()->routeIs('admin.dashboard*') ? 'active' : '' }}" href="{{ route('admin.dashboard.index') }}">
+                <i class="fa-solid fa-house"></i><span>Bảng điều khiển</span>
             </a>
+            <span class="brand-text">Admin Panel</span>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>

@@ -112,6 +112,41 @@ class OrderController extends Controller
             }
         }
 
+        // Áp dụng voucher nếu người dùng đã chọn trong trang đặt cọc
+        if ($request->filled('selected_voucher_id')) {
+            try {
+                $voucher = \App\Models\Voucher::find($request->input('selected_voucher_id'));
+                if ($voucher && $voucher->canBeUsedBy(auth()->user(), $total)) {
+                    if ($voucher->type === 'discount') {
+                        // Tính giảm giá và cập nhật tổng tiền đơn + tiền cọc
+                        $discount = min((float) ($voucher->value ?? 0), $order->total_price);
+                        if ($discount > 0) {
+                            $order->update([
+                                'total_price' => max(0, $order->total_price - $discount),
+                                'deposit_amount' => max(0, ($order->total_price - $discount) * 0.3),
+                            ]);
+                            // Ghi nhận sử dụng voucher
+                            \App\Models\VoucherUsage::create([
+                                'voucher_id' => $voucher->id,
+                                'user_id' => auth()->id(),
+                                'order_id' => $order->id,
+                                'used_at' => now(),
+                            ]);
+                            $voucher->increment('used_count');
+                            if (!is_null($voucher->stock)) { $voucher->decrement('stock'); }
+                            session()->flash('voucher_applied_message', 'Đã áp dụng voucher giảm ' . number_format($discount, 0, ',', '.') . ' đ.');
+                        }
+                    } else {
+                        // Áp dụng như quà tặng (tiered/random/vip)
+                        app(\App\Services\VoucherService::class)->applyVoucher($voucher, $order, auth()->user());
+                        session()->flash('voucher_applied_message', 'Đã thêm quà tặng: ' . $voucher->name);
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::error('Apply voucher on payment failed', ['error' => $e->getMessage()]);
+            }
+        }
+
         // Nếu người dùng bấm nút "Chọn voucher/Quà tặng", luôn điều hướng sang trang chọn ưu đãi
         if ($request->boolean('preview_voucher')) {
             session()->forget('cart');
@@ -397,7 +432,7 @@ return redirect()
     public function orderHistory()
     {
         $orders = Order::where('user_id', Auth::id())
-            ->with(['items.product', 'reviews'])
+            ->with(['items.product', 'reviews', 'voucherUsages.voucher'])
             ->orderByDesc('created_at')
             ->paginate(10);
         return view('user.orders.index', compact('orders'));
@@ -418,7 +453,7 @@ return redirect()
     public function show(Request $request, $orderId)
     {
         // Eager load items.product để tránh N+1 products
-        $order = Order::with(['items.product'])
+        $order = Order::with(['items.product', 'voucherUsages.voucher'])
             ->where('id', $orderId)
             ->where('user_id', $request->user()->id) // đảm bảo là đơn của chính user
             ->firstOrFail();
@@ -464,30 +499,46 @@ return redirect()
             return redirect()->back()->with('error', 'Sản phẩm không có trong đơn hàng này.');
         }
 
-        // Check if already reviewed
-        $existingReview = Review::where([
-            'user_id' => auth()->id(),
-            'product_id' => $request->product_id,
-            'order_id' => $request->order_id,
-        ])->first();
+        // Create or update review uniquely by (user_id, product_id) to honor DB unique index
+        $userId = auth()->id();
+        $productId = (int) $request->product_id;
 
-        if ($existingReview) {
-            return redirect()->back()->with('error', 'Bạn đã đánh giá sản phẩm này rồi.');
-        }
+        $review = DB::transaction(function () use ($userId, $productId, $request) {
+            // Lock existing row (if any) to avoid race condition
+            $existing = Review::where('user_id', $userId)
+                ->where('product_id', $productId)
+                ->lockForUpdate()
+                ->first();
 
-        // Create review
-        Review::create([
-            'user_id' => auth()->id(),
-            'product_id' => $request->product_id,
-            'order_id' => $request->order_id,
-            'rating' => $request->rating,
-            'title' => $request->title,
-            'comment' => $request->comment,
-            'is_verified_purchase' => true,
-            'status' => 'approved', // Auto approve for verified purchases
-        ]);
+            $payload = [
+                'rating' => $request->rating,
+                'title' => $request->title,
+                'comment' => $request->comment,
+                'is_verified_purchase' => true,
+                'status' => Review::STATUS_APPROVED,
+            ];
 
-        return redirect()->back()->with('success', 'Đánh giá của bạn đã được gửi thành công!');
+            if ($existing) {
+                // Keep order_id if already set, otherwise attach this order
+                if (empty($existing->order_id)) {
+                    $existing->order_id = $request->order_id;
+                }
+                $existing->fill($payload)->save();
+                return $existing->fresh();
+            }
+
+            return Review::create(array_merge([
+                'user_id' => $userId,
+                'product_id' => $productId,
+                'order_id' => $request->order_id,
+            ], $payload));
+        }, 3);
+
+        $message = ($review->wasRecentlyCreated ?? false)
+            ? 'Đánh giá của bạn đã được gửi thành công!'
+            : 'Đánh giá của bạn đã được cập nhật!';
+
+        return redirect()->back()->with('success', $message);
     }
 
     /**

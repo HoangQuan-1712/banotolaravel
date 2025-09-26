@@ -143,18 +143,21 @@
                                                             </button>
                                                             <input type="number" name="quantity" id="quantity" value="1"
                                                                 min="1" max="{{ $product->available_stock }}"
-                                                                class="form-control quantity-input">
+                                                                class="form-control quantity-input" {{ $product->available_stock <= 0 ? 'disabled' : '' }}>
                                                             <button type="button" class="btn btn-outline-secondary btn-sm"
                                                                 onclick="increaseQuantity()">
                                                                 <i class="fas fa-plus"></i>
                                                             </button>
                                                         </div>
-                                                        <small class="text-muted">Tối đa: {{ $product->available_stock }} sản
-                                                            phẩm</small>
+                                                        @if($product->available_stock > 0)
+                                                            <small class="text-muted">Tối đa: {{ $product->available_stock }} sản phẩm</small>
+                                                        @else
+                                                            <span class="badge bg-danger mt-2">Đã hết hàng</span>
+                                                        @endif
                                                     </div>
                                                     <div class="col-md-8">
-                                                        <button type="submit" class="btn btn-success btn-lg w-100">
-                                                            <i class="fas fa-shopping-cart"></i> Thêm vào giỏ hàng
+                                                        <button type="submit" class="btn btn-success btn-lg w-100" {{ $product->available_stock <= 0 ? 'disabled' : '' }}>
+                                                            <i class="fas fa-shopping-cart"></i> {{ $product->available_stock <= 0 ? 'Hết hàng' : 'Thêm vào giỏ hàng' }}
                                                         </button>
                                                     </div>
                                                 </div>

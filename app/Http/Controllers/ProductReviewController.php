@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Product;
-use App\Models\ProductReview;
+use App\Models\Review;
 use App\Models\Order;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 class ProductReviewController extends Controller
 {
@@ -48,28 +50,38 @@ class ProductReviewController extends Controller
             ->where('status', 'completed')
             ->exists();
 
-        // Check if user already reviewed this product
-        $existingReview = $user->reviews()
-            ->where('product_id', $product->id)
-            ->first();
-
-        if ($existingReview) {
-            return redirect()->back()->with('error', 'Bạn đã đánh giá sản phẩm này rồi!');
-        }
-
-        // Create review
-        $review = $user->reviews()->create([
-            'product_id' => $product->id,
+        // Create or update review atomically to avoid duplicate key races
+        // Always approve status as requested
+        $payload = [
             'rating' => $request->rating,
             'title' => $request->title,
             'comment' => $request->comment,
             'is_verified_purchase' => $hasPurchased,
-            'status' => $hasPurchased ? ProductReview::STATUS_APPROVED : ProductReview::STATUS_PENDING
-        ]);
+            'status' => Review::STATUS_APPROVED,
+        ];
 
-        $message = $hasPurchased 
-            ? 'Cảm ơn bạn đã đánh giá sản phẩm!' 
-            : 'Đánh giá của bạn đã được gửi và đang chờ duyệt!';
+        // Use transaction with row lock to be fully race-safe
+        $review = DB::transaction(function () use ($user, $product, $payload) {
+            // lock any existing row for this (user, product)
+            $existing = Review::where('user_id', $user->id)
+                ->where('product_id', $product->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                $existing->update($payload);
+                return $existing->fresh();
+            }
+
+            return Review::create(array_merge([
+                'user_id' => $user->id,
+                'product_id' => $product->id,
+            ], $payload));
+        }, 3);
+
+        $message = $review->wasRecentlyCreated ?? false
+            ? 'Cảm ơn bạn đã đánh giá sản phẩm! (đã duyệt)'
+            : 'Đã cập nhật đánh giá của bạn! (đã duyệt)';
 
         return redirect()->back()->with('success', $message);
     }

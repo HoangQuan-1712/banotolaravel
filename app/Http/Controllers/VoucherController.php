@@ -149,4 +149,50 @@ class VoucherController extends Controller {
             'vip_tier_vouchers' => $vip,
         ]);
     }
+
+    /**
+     * Preview applying a specific voucher to a given amount (no order yet)
+     */
+    public function previewApply(Request $request)
+    {
+        $request->validate([
+            'voucher_id' => 'required|exists:vouchers,id',
+            'amount' => 'required|numeric|min:0'
+        ]);
+
+        $user = auth()->user();
+        $amount = (float) $request->input('amount');
+
+        $voucher = \App\Models\Voucher::findOrFail($request->voucher_id);
+
+        if (!$voucher->canBeUsedBy($user, $amount)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Voucher không đủ điều kiện áp dụng cho giá trị hiện tại.'
+            ], 422);
+        }
+
+        // Calculate discount if applicable
+        $discount = 0.0;
+        if ($voucher->type === 'discount') {
+            $discount = min((float) ($voucher->value ?? 0), $amount);
+        }
+
+        $newTotal = max(0, $amount - $discount);
+        $newDeposit = $newTotal * 0.3; // 30%
+
+        return response()->json([
+            'ok' => true,
+            'voucher' => [
+                'id' => $voucher->id,
+                'name' => $voucher->name,
+                'description' => $voucher->description,
+                'type' => $voucher->type,
+                'value' => $voucher->value,
+            ],
+            'discount' => $discount,
+            'new_total' => $newTotal,
+            'new_deposit' => $newDeposit,
+        ]);
+    }
 }

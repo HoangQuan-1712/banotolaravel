@@ -156,6 +156,9 @@ Route::group(['prefix' => 'admin', 'middleware' => 'admin'], function () {
     Route::get('activities/reports', [App\Http\Controllers\AdminActivityController::class, 'reports'])->name('admin.activities.reports');
     Route::post('activities/export', [App\Http\Controllers\AdminActivityController::class, 'exportReport'])->name('admin.activities.export');
 });
+
+// Customer: get or create current user's chat (used by widget to obtain chat_id)
+Route::middleware(['auth'])->get('/chat/my', [ChatController::class, 'open'])->name('chat.my');
 Route::prefix('user')->name('user.')->group(function () {
     Route::resource('categories', CategoryController::class);
 });
@@ -177,6 +180,16 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/admin/chats/{chat}', [ChatController::class, 'adminShow'])->name('admin.chats.show');
     Route::post('/admin/chats/{chat}/assign', [ChatController::class, 'assign'])->name('admin.chats.assign');
     Route::post('/admin/chats/{chat}/close',  [ChatController::class, 'close'])->name('admin.chats.close');
+});
+
+// Chat messages API for both user widget and admin console
+Route::middleware(['auth'])->group(function () {
+    Route::get('/chat/{chat}/messages', [\App\Http\Controllers\MessageController::class, 'index'])
+        ->name('chat.messages.index');
+    Route::post('/chat/{chat}/messages', [\App\Http\Controllers\MessageController::class, 'store'])
+        ->name('chat.messages.store');
+    Route::post('/chat/{chat}/typing', [\App\Http\Controllers\MessageController::class, 'typing'])
+        ->name('chat.typing');
 });
 
 // Thanh toán (OrderController xử lý cả COD & MoMo) - require verified email for users, admins bypass
@@ -213,8 +226,10 @@ Route::middleware(['auth', 'verified_or_admin'])->group(function () {
     Route::get('/checkout/vouchers/{order}', [VoucherController::class,'showChoices'])->name('vouchers.choices');
     Route::post('/checkout/vouchers/{order}/apply', [VoucherController::class,'applyChoice'])->name('vouchers.apply');
     Route::post('/checkout/vouchers/{order}/random', [VoucherController::class,'randomGift'])->name('vouchers.random');
-    Route::get('/api/vouchers/{order}', [VoucherController::class,'getAvailableVouchers'])->name('vouchers.api');
+    // Specific voucher APIs must come BEFORE the wildcard '{order}' route to avoid 404
     Route::get('/api/vouchers/preview', [VoucherController::class,'preview'])->name('vouchers.preview');
+    Route::get('/api/vouchers/preview-apply', [VoucherController::class,'previewApply'])->name('vouchers.preview-apply');
+    Route::get('/api/vouchers/{order}', [VoucherController::class,'getAvailableVouchers'])->name('vouchers.api');
 });
 
 // Product Reviews routes (require verified email for users, admins bypass) - namespaced as 'product-reviews.*'
